@@ -760,7 +760,8 @@ pub struct Runtime<S: 'static> {
     window_focused: Option<bool>,
     /// `keys_lost` queued its `FocusLost` since the window last had focus.
     keys_lost: bool,
-    live_subscriptions: Vec<Arc<crate::live::Subscription>>,
+    /// This window's subscription to each bound live source, by source id.
+    live_subscriptions: HashMap<u64, Arc<crate::live::Subscription>>,
     live_dirty: bool,
     /// Events whose handler said `Tx::live_only`, and so didn't commit.
     live_only_skips: u64,
@@ -1071,7 +1072,7 @@ impl<S: 'static> Runtime<S> {
             on_mods: None,
             mods_heard: Default::default(),
             app_ime: Default::default(),
-            live_subscriptions: Vec::new(),
+            live_subscriptions: HashMap::default(),
             live_dirty: false,
             live_only_skips: 0,
             last_commit_clock: f64::NEG_INFINITY,
