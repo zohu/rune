@@ -171,7 +171,7 @@ impl RuntimeCore {
 
     /// Install before the first frame. Live updates use this separate coalesced wake lane.
     pub(crate) fn set_live_waker(&mut self, waker: Waker) {
-        for sub in &self.frame.live_subscriptions { sub.active.store(false, Ordering::Release); }
+        for sub in self.frame.live_subscriptions.values() { sub.active.store(false, Ordering::Release); }
         self.frame.live_subscriptions.clear();
         self.frame.live.replace_waker(waker);
         self.subscribe_live();
@@ -205,7 +205,7 @@ impl RuntimeCore {
                 for bound in &mut cold.live { bound.attach(&self.frame.live_clock, self.clock); }
             }
         }
-        for sub in &self.frame.live_subscriptions { sub.active.store(false, Ordering::Release); }
+        for sub in self.frame.live_subscriptions.values() { sub.active.store(false, Ordering::Release); }
         // Pixels only wake: each frame's build uploads their current image, so unlike bound
         // values they leave nothing to sample on a later visible frame.
         let mut sampled = false;
@@ -221,15 +221,16 @@ impl RuntimeCore {
             // pixels keep waking until the exit ends (commit already dropped their bindings).
             if !self.scene.contains(node.id) { continue; }
             sampled |= text.is_some() || has_live;
+            // Looked up by id: a commit visits every bound source, so a linear search here made
+            // each commit quadratic in the number of bindings.
             for source in node.live.iter().map(|b| &b.source).chain(text).chain(pixels) {
-                if let Some(sub) = self.frame.live_subscriptions.iter().find(|s| s.source_id == source.id()) {
-                    sub.active.store(true, Ordering::Release);
-                } else {
-                    self.frame.live_subscriptions.push(source.subscribe(self.frame.live.waker()));
+                match self.frame.live_subscriptions.entry(source.id()) {
+                    std::collections::hash_map::Entry::Occupied(sub) => sub.get().active.store(true, Ordering::Release),
+                    std::collections::hash_map::Entry::Vacant(slot) => { slot.insert(source.subscribe(self.frame.live.waker())); }
                 }
             }
         }
-        self.frame.live_subscriptions.retain(|s| s.active.load(Ordering::Acquire));
+        self.frame.live_subscriptions.retain(|_, s| s.active.load(Ordering::Acquire));
         self.frame.live.subscribed(sampled);
     }
 

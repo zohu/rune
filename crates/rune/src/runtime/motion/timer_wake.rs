@@ -30,7 +30,8 @@ pub(crate) struct FrameState {
     #[cfg(debug_assertions)]
     pub(crate) live_only_warnings: Vec<String>,
     pub(in crate::runtime) live_clock: Arc<()>,
-    pub(in crate::runtime) live_subscriptions: Vec<Arc<crate::live::Subscription>>,
+    /// This window's subscription to each bound live source, by source id.
+    pub(in crate::runtime) live_subscriptions: HashMap<u64, Arc<crate::live::Subscription>>,
     /// Events whose handler said `Tx::live_only`, and so didn't commit.
     pub(in crate::runtime) live_only_skips: u64,
     pub(in crate::runtime) last_dt: f64,
@@ -62,7 +63,7 @@ impl FrameState {
             test_clock: None,
             live: live_latch::LiveLane::new(Arc::new(|| {})),
             live_clock: Arc::new(()),
-            live_subscriptions: Vec::new(),
+            live_subscriptions: HashMap::default(),
             live_only_skips: 0,
             #[cfg(debug_assertions)]
             live_only_check: true,
