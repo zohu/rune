@@ -36,7 +36,8 @@ impl El {
     /// The container takes no authored children and must not also use `virtual_rows` or
     /// `virtualize`. Give it an explicit size: its children do not determine its size.
     /// Window changes alone retain existing subtrees, Live bindings, memos, clocks and focus
-    /// without running the root view. New items mount settled, with no entrance replay;
+    /// without running the root view, including inside Playground when its controls and
+    /// Story state are unchanged. New items mount settled, with no entrance replay;
     /// leaving items unmount immediately without exits. A focused item's subtree stays
     /// mounted outside the window until focus leaves it (the source must still build its key).
     /// Hit testing, accessibility and Tab order see mounted children only, including that pin.

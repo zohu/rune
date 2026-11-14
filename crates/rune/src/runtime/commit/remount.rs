@@ -48,6 +48,7 @@ impl<S: 'static> Runtime<S> {
     /// Whether this commit only shifts or fills `virtual_rows` windows, so `view` and already
     /// mounted subtrees need not rebuild.
     pub(in crate::runtime) fn virtual_only(&self, tx: &Tx) -> bool {
+        // Hot callbacks run after the jump table changes; pending alone cannot guard reuse.
         #[cfg(feature = "hot")]
         if self.hot.is_some() {
             return false;
@@ -59,7 +60,6 @@ impl<S: 'static> Runtime<S> {
             || self.reuse.read_moved
             || self.reuse.scale != self.env.scale
             || self.reuse.srgb != Some(self.srgb_blend)
-            || self.playground.is_some()
             || self.patch_pending()
             || (self.virtuals.is_empty() && self.items.lists.is_empty())
             || self.nodes.is_empty()

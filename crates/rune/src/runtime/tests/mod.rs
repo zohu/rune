@@ -24,6 +24,7 @@ mod pointer_hit;
 mod press_moving;
 mod relayout;
 mod remount;
+mod remount_hosts;
 mod reveal_chain;
 mod scroll_carried;
 mod scroll_children;

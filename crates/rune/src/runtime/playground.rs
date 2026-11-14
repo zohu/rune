@@ -58,6 +58,7 @@ impl<S: 'static> Runtime<S> {
     pub(super) fn apply_playground(&mut self) {
         self.sync_region();
         let Some(playground) = &self.playground else { return };
+        if self.dirty { self.state_unchanged = false; }
         if !playground.has_pending() { return; }
         let swaps = playground.pending_swaps_stage();
         let keep = playground.pending_replays_only() && self.focused_index().is_some_and(|i| self.under(i, |k| k == "playground-side"));
@@ -65,6 +66,8 @@ impl<S: 'static> Runtime<S> {
         if swaps && !keep && self.focused.is_some() { self.set_focus(None, false); }
         let clock = self.clock;
         if !self.playground.as_mut().is_some_and(|p| p.apply(clock, &mut self.state)) { return; }
+        // Applying requests can replace the stage even when no app handler ran.
+        self.state_unchanged = false;
         self.memo.clear();
         if swaps { self.leave_stage(was_open); }
         // A new stage state gets its first poll on the next frame, as an app's does.
