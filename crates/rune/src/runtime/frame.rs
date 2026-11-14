@@ -153,6 +153,7 @@ impl RuntimeCore {
         let shaped0 = self.text.shaped;
         self.settled = false;
         self.motion.landing_holds.clear();
+        self.commit.items.frame += 1;
         // `RUNE_LOOP_CHECK=1`: the frame that runs instead of a checked step samples at its clock.
         self.clock = self.paint.keep.cycles.check_clock.take().unwrap_or_else(|| self.wall_clock().unwrap_or(self.clock + elapsed));
         if self.wall_start.is_none() {

@@ -66,7 +66,8 @@ impl RuntimeCore {
         if !unchanged { return CommitKind::Rebuild; }
         if self.commit.relayout {
             // The nodes it built are all there, in the layout tree's order.
-            return if self.tree.nodes.iter().all(reusable) { CommitKind::Relayout } else { CommitKind::Rebuild };
+            // A resize that also moves an item window builds it: a relayout mounts nothing.
+            return if self.tree.nodes.iter().all(reusable) && !self.item_window_changed() { CommitKind::Relayout } else { CommitKind::Rebuild };
         }
         if self.virtual_only() { CommitKind::Remount } else { CommitKind::Rebuild }
     }

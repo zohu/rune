@@ -568,6 +568,7 @@ impl RuntimeCore {
         if self.tree.nodes.len() > present_len || !self.motion.flying.is_empty() || landed || self.tree.has_sticky || self.tree.has_raise || self.tree.has_paint_order { self.update_layer_paint_order(); }
         else { self.paint.layer_paint_order.clear(); }
         self.tree.built = false;
+        self.applied_items();
         self.subscribe_live();
         self.sync_modals(app);
         self.sync_follows(app);

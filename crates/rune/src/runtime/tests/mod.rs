@@ -49,6 +49,7 @@ mod text_quads;
 mod text_rebreak;
 mod titlebar_press;
 mod unseen_entrances;
+mod virtual_items;
 mod window_wake;
 
 thread_local! {

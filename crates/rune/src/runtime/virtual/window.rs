@@ -5,7 +5,7 @@ use super::virtual_fill::{FillEffect, FillEvent};
 
 impl RuntimeCore {
     pub(super) fn virtual_window_changed(&self) -> bool {
-        self.commit.virtuals.iter().any(|(path, v)| self.wants_window(path, v))
+        self.item_window_changed() || self.commit.virtuals.iter().any(|(path, v)| self.wants_window(path, v))
     }
 
     pub(super) fn report_visible_rows(&mut self) -> bool {
@@ -89,8 +89,14 @@ impl RuntimeCore {
     /// Whether an index-built list still mounts its overscan a little per frame, so the host
     /// should draw another. Each such frame commits more rows; a few frames fill it. A list
     /// whose heights keep changing past those frames waits a few frames out and resumes, until
-    /// the unfilled range stops shrinking.
+    /// the unfilled range stops shrinking. An item window still admitting its budget draws
+    /// another frame too.
     pub(super) fn virtual_filling(&mut self) -> bool {
+        let rows = self.rows_filling();
+        rows || self.item_window_changed()
+    }
+
+    fn rows_filling(&mut self) -> bool {
         let now = self.clock;
         let (wanted, moved) = self.virtual_demand();
         // A wake must draw nothing for a list that finished, unmounted or stopped filling: it

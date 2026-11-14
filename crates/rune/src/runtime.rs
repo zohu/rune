@@ -104,6 +104,8 @@ mod zoom;
 mod virtual_window;
 #[path = "runtime/virtual/fill.rs"]
 mod virtual_fill;
+#[path = "runtime/virtual/items.rs"]
+mod items;
 #[path = "runtime/virtual/row_reorder.rs"]
 mod row_reorder;
 #[cfg(test)]

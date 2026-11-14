@@ -81,6 +81,7 @@ impl RuntimeCore {
             memo: &mut self.commit.memo,
             next_id: &mut self.tree.next_id,
             scrolls: &mut self.scroll.scrolls,
+            items: &mut self.commit.items,
             virtuals: &mut self.commit.virtuals,
             virtual_culled: &mut self.commit.virtual_culled,
             virtual_inputs: &mut self.commit.virtual_inputs,
@@ -253,6 +254,7 @@ impl Measurement<'_> {
         el.expand_memo();
         let inert = inert || el.flags.has(ElFlags::INERT);
         let bound = crate::el::virtual_list::height_bound(&el.style, bound);
+        self.populate_items(el, &path);
         if let Some(estimate) = el.cold.virtual_estimate {
             let w = match self.windowed.remove(&path) {
                 Some(w) => w,
@@ -717,6 +719,10 @@ fn windowed_lists<'e>(el: &'e El, path: &str, scroll: Option<(&str, bool, f32)>,
         None => &el.children,
     };
     let bound = crate::el::virtual_list::height_bound(&el.style, bound);
+    // An item window is selected while its container expands, so its memo can't stay a placeholder.
+    if el.cold.virtual_items.is_some() {
+        return false;
+    }
     if el.cold.virtual_estimate.is_some() {
         if el.cold.virtual_rows.is_none() {
             return false;
