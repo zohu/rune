@@ -60,14 +60,15 @@ impl RuntimeCore {
     pub(in crate::runtime) fn commit_kind(&self, tx: &Tx) -> CommitKind {
         let unchanged = self.commit.state_unchanged && !tx.commit.lands() && !self.commit.reuse.read_moved
             && self.commit.reuse.scale == self.env.scale && self.commit.reuse.srgb == Some(self.paint.srgb_blend)
-            && !self.tree.has_playground && !self.patch_pending()
+            && !self.patch_pending()
             // Exiting nodes left the layout tree.
             && self.commit.layout.live_count() == self.tree.nodes.len();
         if !unchanged { return CommitKind::Rebuild; }
         if self.commit.relayout {
             // The nodes it built are all there, in the layout tree's order.
             // A resize that also moves an item window builds it: a relayout mounts nothing.
-            return if self.tree.nodes.iter().all(reusable) && !self.item_window_changed() { CommitKind::Relayout } else { CommitKind::Rebuild };
+            // Inside the playground only a virtual window's remount keeps the view; a resize rebuilds.
+            return if !self.tree.has_playground && self.tree.nodes.iter().all(reusable) && !self.item_window_changed() { CommitKind::Relayout } else { CommitKind::Rebuild };
         }
         if self.virtual_only() { CommitKind::Remount } else { CommitKind::Rebuild }
     }

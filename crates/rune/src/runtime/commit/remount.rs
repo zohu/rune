@@ -49,6 +49,7 @@ impl RuntimeCore {
     /// ([`Runtime::commit_kind`]) only shifts or fills `virtual_rows` windows, so `view` and
     /// already mounted subtrees need not rebuild.
     pub(in crate::runtime) fn virtual_only(&self) -> bool {
+        // Hot callbacks run after the jump table changes; pending alone cannot guard reuse.
         #[cfg(feature = "hot")]
         if self.frame.hot.is_some() {
             return false;
