@@ -9,7 +9,7 @@ const VIRTUAL_FILL_FRAMES: u32 = 12;
 
 impl<S: 'static> Runtime<S> {
     pub(super) fn virtual_window_changed(&self) -> bool {
-        self.virtuals.iter().any(|(path, v)| self.wants_window(path, v))
+        self.item_window_changed() || self.virtuals.iter().any(|(path, v)| self.wants_window(path, v))
     }
 
     pub(super) fn report_visible_rows(&mut self) -> bool {
@@ -65,6 +65,6 @@ impl<S: 'static> Runtime<S> {
     pub(super) fn virtual_filling(&mut self) -> bool {
         let filling = self.virtuals.iter().any(|(path, v)| v.indexed && self.wants_window(path, v));
         self.virtual_fill = if filling { self.virtual_fill + 1 } else { 0 };
-        filling && self.virtual_fill <= VIRTUAL_FILL_FRAMES
+        self.item_window_changed() || (filling && self.virtual_fill <= VIRTUAL_FILL_FRAMES)
     }
 }

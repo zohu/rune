@@ -92,7 +92,7 @@ impl<S: 'static> Runtime<S> {
     /// Whether this commit only resized the window: nothing the view reads changed since the
     /// last commit built it, and the nodes it built are all there, in the layout tree's order.
     pub(super) fn resize_only(&self, tx: &Tx) -> bool {
-        self.relayout && self.state_unchanged && !tx.settle && !self.reuse.read_moved
+        self.relayout && self.state_unchanged && !tx.settle && !self.reuse.read_moved && !self.item_window_changed()
             && self.reuse.scale == self.env.scale && self.reuse.srgb == Some(self.srgb_blend)
             && self.playground.is_none() && !self.patch_pending()
             // Exiting nodes left the layout tree.

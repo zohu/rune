@@ -78,6 +78,8 @@ pub(crate) fn handler_state_ref<S: 'static>(state: &S) -> &dyn Any {
 #[cfg(debug_assertions)]
 #[path = "runtime/commit/layout_diagnostics.rs"]
 mod layout_diagnostics;
+#[path = "runtime/virtual/items.rs"]
+mod items;
 #[path = "runtime/paint/blend.rs"]
 mod blend;
 #[path = "runtime/commit/watch.rs"]
@@ -551,6 +553,7 @@ pub struct Runtime<S: 'static> {
     touch: touch_input::Touch,
     grows: HashMap<NodeId, GrowTrack>,
     stacks: HashMap<NodeId, Stack>,
+    pub(crate) items: items::Windows,
     pub(crate) virtuals: HashMap<String, crate::el::virtual_list::VirtualList>,
     /// The recorder `Tx::record_rewind` attached (`runtime/motion/rewind.rs`).
     rewind: Option<crate::rewind::Rewind>,
@@ -950,6 +953,7 @@ impl<S: 'static> Runtime<S> {
             touch: Default::default(),
             grows: HashMap::default(),
             stacks: HashMap::default(),
+            items: items::Windows::default(),
             virtuals: HashMap::default(),
             rewind: None,
             virtual_culled: HashSet::default(),

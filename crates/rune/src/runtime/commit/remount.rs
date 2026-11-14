@@ -11,13 +11,23 @@ use std::rc::Rc;
 
 use super::*;
 
+#[path = "remount_items.rs"]
+mod item_plans;
+use item_plans::refresh_live_text;
+
 pub(in crate::runtime) enum RemountOutcome {
     Measured(Measured),
     Retry,
     Fallback,
 }
 
+enum Source {
+    Rows(Rc<crate::el::virtual_rows::RowSource>),
+    Items(Rc<dyn crate::VirtualItems>),
+}
+
 struct ListPlan {
+    keys: Vec<String>,
     path: String,
     old_list_idx: usize,
     list_subtree_end: usize,
@@ -27,7 +37,7 @@ struct ListPlan {
     mounted_rows: HashMap<String, (usize, usize)>,
     focused: Option<usize>,
     pinned: Vec<usize>,
-    rows: Rc<crate::el::virtual_rows::RowSource>,
+    source: Source,
     list_group: Option<String>,
     inert: bool,
     quiet: Vec<bool>,
@@ -51,16 +61,23 @@ impl<S: 'static> Runtime<S> {
             || self.reuse.srgb != Some(self.srgb_blend)
             || self.playground.is_some()
             || self.patch_pending()
-            || self.virtuals.is_empty()
+            || (self.virtuals.is_empty() && self.items.lists.is_empty())
             || self.nodes.is_empty()
             || self.layout.live_count() != self.nodes.len()
         {
             return false;
         }
         if !self.nodes.iter().all(|n| {
-            relayout::reusable(n) && n.text.as_ref().is_none_or(|t| !t.redacted && t.live.is_none())
+            relayout::reusable(n) && n.text.as_ref().is_none_or(|t| !t.redacted)
         }) {
             return false;
+        }
+        let paths: Vec<_> = self.virtuals.keys().chain(self.items.lists.keys()).collect();
+        if paths.iter().any(|path| paths.iter().any(|other| other != path && other.strip_prefix(path.as_str()).is_some_and(|r| r.starts_with('/')))) {
+            return false;
+        }
+        for path in self.items.lists.keys() {
+            if !self.path_ids.get(path).and_then(|id| self.node_index.get(id)).is_some_and(|&i| self.nodes[i].path == *path) { return false; }
         }
         for (path, v) in &self.virtuals {
             if !v.indexed || !v.selection.source.as_ref().is_some_and(|s| s.count == v.keys.len()) {
@@ -241,18 +258,20 @@ impl<S: 'static> Measurement<'_, S> {
                 mounted_rows,
                 focused,
                 pinned: pinned_rows,
-                rows,
+                source: Source::Rows(rows),
+                keys: Vec::new(),
                 list_group,
                 inert,
                 quiet: Vec::new(),
                 built_rows: Vec::new(),
             });
         }
+        self.plan_items(&mut plans);
         plans.sort_unstable_by_key(|p| p.old_list_idx);
 
         let mut kept_rows = HashSet::default();
         for plan in &plans {
-            let keys = &self.virtuals[&plan.path].keys;
+            let keys = match plan.source { Source::Rows(_) => &self.virtuals[&plan.path].keys, Source::Items(_) => &plan.keys };
             for row_i in plan.range.clone() {
                 let key = &keys[row_i];
                 if plan.mounted_rows.contains_key(key) {
@@ -276,9 +295,21 @@ impl<S: 'static> Measurement<'_, S> {
         let state = playground_host::handler_states_ref(self.state, self.playground);
         let mut nested_virtual = false;
         for plan in &mut plans {
+            if let Source::Items(source) = &plan.source {
+                for (pos, key) in plan.keys.iter().enumerate() {
+                    if !plan.mounted_rows.contains_key(key) {
+                        let item = items::build_item(source, &plan.path, key);
+                        if item.flags.has(crate::el::ElFlags::HAS_VIRTUAL) { nested_virtual = true; break; }
+                        plan.built_rows.push((pos, item));
+                    }
+                }
+                if nested_virtual { break; }
+                continue;
+            }
+            let Source::Rows(rows) = &plan.source else { unreachable!() };
             let v = self.virtuals.get_mut(&plan.path).unwrap();
             if let Some(i) = plan.focused {
-                let row = build_indexed_row(&plan.rows, state, &plan.path, &v.keys[i], i, self.key_warnings);
+                let row = build_indexed_row(rows, state, &plan.path, &v.keys[i], i, self.key_warnings);
                 measure::collect_virtual_inputs(&row, &plan.path, i, plan.inert, self.virtual_inputs);
                 if plan.pinned.contains(&i) {
                     selectable::virtual_selection::collect_virtual_row_selection(
@@ -297,7 +328,7 @@ impl<S: 'static> Measurement<'_, S> {
                 if Some(i) == plan.focused {
                     continue;
                 }
-                let row = build_indexed_row(&plan.rows, state, &plan.path, &v.keys[i], i, self.key_warnings);
+                let row = build_indexed_row(rows, state, &plan.path, &v.keys[i], i, self.key_warnings);
                 selectable::virtual_selection::collect_virtual_row_selection(
                     &row,
                     &plan.path,
@@ -312,7 +343,7 @@ impl<S: 'static> Measurement<'_, S> {
             for (pos, row_i) in plan.range.clone().enumerate() {
                 let key = &v.keys[row_i];
                 if !plan.mounted_rows.contains_key(key) {
-                    let row = build_indexed_row(&plan.rows, state, &plan.path, key, row_i, self.key_warnings);
+                    let row = build_indexed_row(rows, state, &plan.path, key, row_i, self.key_warnings);
                     if row.flags.has(crate::el::ElFlags::HAS_VIRTUAL) {
                         nested_virtual = true;
                         break;
@@ -336,8 +367,13 @@ impl<S: 'static> Measurement<'_, S> {
         }
 
         for plan in &mut plans {
-            let v = self.virtuals.get_mut(&plan.path).unwrap();
-            plan.quiet = plan.range.clone().map(|i| v.mounts_quietly(i, self.commits)).collect();
+            plan.quiet = match &plan.source {
+                Source::Rows(_) => {
+                    let v = self.virtuals.get_mut(&plan.path).unwrap();
+                    plan.range.clone().map(|i| v.mounts_quietly(i, self.commits)).collect()
+                }
+                Source::Items(_) => vec![true; plan.keys.len()],
+            };
             for (pos, row) in &mut plan.built_rows {
                 row.flags.set(crate::el::ElFlags::VIRTUAL_MOUNT, plan.quiet[*pos]);
             }
@@ -406,8 +442,10 @@ impl<S: 'static> Measurement<'_, S> {
                 });
 
                 let mut list_style = taffy.style(list_taffy).clone();
-                list_style.set_pad_top(plan.pad_top);
-                list_style.set_pad_bottom(plan.pad_bottom);
+                if matches!(plan.source, Source::Rows(_)) {
+                    list_style.set_pad_top(plan.pad_top);
+                    list_style.set_pad_bottom(plan.pad_bottom);
+                }
                 let parent_row = matches!(
                     list_style.flex_direction(),
                     FlexDirection::Row | FlexDirection::RowReverse
@@ -416,7 +454,7 @@ impl<S: 'static> Measurement<'_, S> {
                 let mut row_slots = Vec::with_capacity(plan.range.len());
                 let mut any_row_dirty = false;
                 let mut built_iter = plan.built_rows.into_iter().peekable();
-                let keys = &self.virtuals[&plan.path].keys;
+                let keys = match plan.source { Source::Rows(_) => &self.virtuals[&plan.path].keys, Source::Items(_) => &plan.keys };
                 for (pos, row_i) in plan.range.clone().enumerate() {
                     if built_iter.peek().is_some_and(|(p, _)| *p == pos) {
                         let (_, row_el) = built_iter.next().unwrap();
@@ -524,6 +562,7 @@ impl<S: 'static> Measurement<'_, S> {
 
         path_buf.clear();
         self.memo.path_scratch = path_buf;
+        for node in &mut nodes { refresh_live_text(node, scale); }
         taffy.finish_flatten();
         let root_id = nodes[0].taffy;
         let (layout, mut nodes) = self.solve(taffy, root_id, nodes);

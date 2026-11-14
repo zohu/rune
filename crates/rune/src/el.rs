@@ -100,7 +100,11 @@ pub fn text(content: impl Into<String>) -> El {
 }
 mod text_spec;
 mod tx;
+#[path = "el/virtual/items.rs"]
+pub(crate) mod virtual_items;
+#[path = "el/virtual/list.rs"]
 pub(crate) mod virtual_list;
+#[path = "el/virtual/rows.rs"]
 pub(crate) mod virtual_rows;
 mod visual;
 mod visuals;

@@ -73,6 +73,7 @@ impl<S: 'static> Runtime<S> {
             if let Some(spec) = &mut node.text
                 && let Some(live) = &spec.live
             {
+                node.cold.live_text_measure.get_or_insert_with(|| spec.clone());
                 let seen = &mut node.cold.live_text_seen;
                 if let Some(text) = live.read(seen) && spec.source_text() != &*text {
                     spec.replace_content(text.to_string());

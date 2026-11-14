@@ -863,6 +863,7 @@ impl<S: 'static> Runtime<S> {
             self.virtuals.retain(|path, _| self.nodes.iter().any(|n| n.path == *path));
         }
         self.prune_path_ids();
+        self.applied_items();
         self.subscribe_live();
         self.refresh_modal_index();
         self.sync_modals();

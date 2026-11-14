@@ -79,6 +79,7 @@ impl<S: 'static> Runtime<S> {
             memo: &mut self.memo,
             next_id: &mut self.next_id,
             scrolls: &mut self.scrolls,
+            items: &mut self.items,
             virtuals: &mut self.virtuals,
             virtual_culled: &mut self.virtual_culled,
             virtual_inputs: &mut self.virtual_inputs,
@@ -245,6 +246,7 @@ impl<S: 'static> Measurement<'_, S> {
         let inert = inert || el.flags.has(ElFlags::INERT);
         let bound = crate::el::virtual_list::height_bound(&el.style, bound);
         let path = node_path(parent, el.key.as_deref(), index);
+        self.populate_items(el, &path);
         if let Some(estimate) = el.cold.virtual_estimate {
             assert!(el.cold.growth.is_some(), "`.virtualize(..)` at {path:?} needs `.growth(GrowthSpec)` on the same element");
             let (scroll_path, sticky, scroll_bound) = scroll.expect("virtual stack must be the direct child of a scroll viewport");

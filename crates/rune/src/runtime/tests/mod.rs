@@ -40,6 +40,7 @@ mod text_glide;
 mod text_keys;
 mod text_rebreak;
 mod unseen_entrances;
+mod virtual_items;
 mod window_wake;
 
 thread_local! {
