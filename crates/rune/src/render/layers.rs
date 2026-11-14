@@ -32,9 +32,9 @@ pub(super) struct Layers {
     pub targets: Vec<Option<Target>>,
     retained: Vec<Target>,
     stack: Vec<usize>,
-    pipelines: Vec<(wgpu::TextureFormat, wgpu::RenderPipeline)>,
+    pub(super) pipelines: Vec<(wgpu::TextureFormat, wgpu::RenderPipeline)>,
     pub additive: Option<(wgpu::RenderPipeline, wgpu::RenderPipeline)>,
-    blur: Option<layer_blur::Pipeline>,
+    pub(super) blur: Option<layer_blur::Pipeline>,
     viewport: (u32, u32),
     image_generation: u64,
     allocations: u64,
@@ -516,7 +516,14 @@ impl Renderer {
 
     pub(super) fn add_layer_format(&mut self, device: &wgpu::Device, format: wgpu::TextureFormat) {
         if !self.layers.pipelines.iter().any(|(f, _)| *f == format) {
-            self.layers.pipelines.push((format, Self::pipeline(device, &self.layout, &self.shader, format, "vs", Blend::SourceOver)));
+            let pipeline = if self.vertex_entry == "vs" && format == self.format {
+                self.pipeline.clone()
+            } else if self.vertex_entry == "vs" && let Some((_, p)) = self.extra.iter().find(|(f, _)| *f == format) {
+                p.clone()
+            } else {
+                Self::pipeline(device, &self.layout, &self.shader, format, "vs", Blend::SourceOver)
+            };
+            self.layers.pipelines.push((format, pipeline));
         }
     }
 

@@ -192,6 +192,7 @@ impl Renderer {
         instances: &[Instance],
         viewport: (u32, u32),
     ) {
+        self.prepare_effect_pipelines(device);
         if self.springs.is_some() { assert_eq!(instances.len(), self.spring_instances); }
         let staging = self.uploads.staging(device, queue);
         if staging.lost() != self.uploads.lost.0 {
@@ -250,6 +251,10 @@ impl Renderer {
             }
         }
         self.prepare_backdrop_blur(device, queue, viewport);
+        // Start even when this is the only frame before the window becomes idle.
+        if matches!(self.effect_warmup, super::effect_warmup::State::Idle) {
+            self.prepare_effect_pipelines(device);
+        }
     }
 
     pub fn prepare_surfaces(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, draws: &[crate::native_surface::SurfaceDraw], viewport: (u32,u32)) {

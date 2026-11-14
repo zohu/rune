@@ -1,0 +1,1 @@
+- Compile common layer and blur pipelines on a worker after preparing the first frame, reuse compatible layer composites, and activate warmed formats only when drawing needs them, preserving lazy backdrop allocation and first-use fallback.

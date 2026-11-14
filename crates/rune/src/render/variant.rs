@@ -195,6 +195,7 @@ impl Renderer {
     /// Takes `built` as the renderer's shader: every pipeline again from it. Bind groups follow
     /// once the outline texture exists (`rebind_all`).
     fn adopt(&mut self, device: &wgpu::Device, built: Built) {
+        self.effect_warmup = Default::default();
         self.bind_layout = built.bind_layout;
         self.layout = built.layout;
         self.shader = built.shader;

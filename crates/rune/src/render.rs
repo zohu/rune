@@ -690,6 +690,7 @@ mod prewarm {
     pub(super) fn discard() {}
 }
 
+mod effect_warmup;
 mod warmup;
 pub use warmup::{warm_gpu, warm_gpu_with};
 pub(crate) use warmup::{park_gpu, surface_gpu};
@@ -739,6 +740,7 @@ pub struct Renderer {
     /// Pipelines and pyramid for backdrop blur records, built on the first one.
     backdrop_blur: Option<backdrop_blur::BackdropBlur>,
     uploads: upload::Uploads,
+    effect_warmup: effect_warmup::State,
     /// Unique to this renderer, so to the device it was made on (`Frame::device_key`).
     device_key: crate::compose::DeviceKey,
 }
@@ -852,6 +854,7 @@ impl Renderer {
             backdrops: Vec::new(),
             backdrop_blur: None,
             uploads: Default::default(),
+            effect_warmup: Default::default(),
             device_key: crate::compose::DeviceKey::next(),
         }
     }
@@ -941,7 +944,8 @@ impl Renderer {
     /// Builds the pipeline for another target format (e.g. an `Rgba16Float` layer), once.
     pub fn add_format(&mut self, device: &wgpu::Device, format: wgpu::TextureFormat) {
         if format != self.format && !self.extra.iter().any(|(f, _)| *f == format) {
-            let p = Self::pipeline(device, &self.layout, &self.shader, format, self.vertex_entry, Blend::SourceOver);
+            let p = self.effect_warmup.take_content(format).unwrap_or_else(||
+                Self::pipeline(device, &self.layout, &self.shader, format, self.vertex_entry, Blend::SourceOver));
             self.extra.push((format, p));
         }
         if self.layer_stats().targets > 0 { self.add_layer_format(device, format); }
