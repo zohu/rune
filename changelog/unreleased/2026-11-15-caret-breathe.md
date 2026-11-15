@@ -1,0 +1,1 @@
+- Text inputs can opt into a softly breathing native caret with `El::caret_breathe`, including an activity hold, steady reduced-motion and composition states, and rendering-only updates while visible.

@@ -719,7 +719,11 @@ impl RuntimeCore {
                 }
             }
             if let (Some(c), Some(inp)) = (caret, &n.input) {
-                self.instances.push(rect_inst(c, premul(inp.caret, o, srgb), 0.0, clip, fade));
+                // A caret too faint to see or mid-composition holds still.
+                let breath = inp.caret_breathe.map(|spec| (spec, o * inp.caret.a >= 1.0 / 255.0 && !inp.edit.is_composing()));
+                let (id, ink) = (n.id, inp.caret);
+                let alpha = self.caret_alpha(id, breath, c, clip, now);
+                self.instances.push(rect_inst(c, premul(ink, o * alpha, srgb), 0.0, clip, fade));
             }
             self.text.set_emit(crate::text::outline::Emit::Atlas);
         }

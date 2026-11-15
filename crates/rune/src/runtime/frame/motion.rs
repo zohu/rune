@@ -20,7 +20,7 @@ impl RuntimeCore {
     /// Wakes when a delayed start at animation time `at` comes due, on the loops' wake: the
     /// frame then runs at exactly that time, however long the host slept. A hidden window
     /// sleeps through it; showing it settles.
-    fn wake_for_motion(&mut self, at: f64) {
+    pub(in crate::runtime) fn wake_for_motion(&mut self, at: f64) {
         self.paint.keep.cycles.other_deadline();
         if !self.frame.live.visible() || self.time_scale <= 0.0 { return; }
         let wake = self.clock + (at - self.t).max(0.0) / self.time_scale as f64;

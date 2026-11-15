@@ -27,6 +27,7 @@ impl RuntimeCore {
         if self.playground_nav(app, ev, one) { return true; }
         if app_first && !app.playground_typing() && app.has_on_key() && Tx::took(app.on_key(ev, one), one) { return true; }
         if self.focused_input().is_some() {
+            self.edit.caret_breath.reset();
             self.edit.input_click.clear_last();
         }
         if let Some(f) = self.focused_input().and_then(|input| input.key.clone())
@@ -216,6 +217,7 @@ impl RuntimeCore {
             return false;
         };
         let Some(access) = access else { return false };
+        self.edit.caret_breath.reset();
         self.edit.input_click.clear_last();
         {
             let edit = access(app.states());

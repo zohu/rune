@@ -260,6 +260,7 @@ impl RuntimeCore {
     pub(in crate::runtime) fn set_focus(&mut self, app: &mut dyn AppDriver, path: Option<String>, keyboard: bool) -> bool {
         self.edit.input_click.on_focus_change(path.as_deref());
         let moved = self.kbd.focus.path() != path.as_deref();
+        if moved { self.edit.caret_breath.reset(); }
         // A field left mid-composition keeps what it showed, as a browser's does (Tab the input
         // method let through, a click on another control, `Tx::focus`).
         if moved && self.focused_input().is_some() && self.composing(app) {
@@ -315,6 +316,12 @@ impl RuntimeCore {
         let owed = self.kbd.focus_owed.take().map(|(key, ring)| (key, ring, crate::el::FocusAsk::WhenShown));
         let asked = self.kbd.focus_request.take().or(owed);
         let waits = asked.as_ref().filter(|(.., ask)| *ask == crate::el::FocusAsk::WhenShown).map(|(key, ring, _)| (key.clone(), *ring));
+        // External model updates also restart the caret, without copying the text.
+        if let Some(path) = self.kbd.focus.path()
+            && let Some(old) = self.node(path).and_then(|n| n.input.as_ref())
+            && let Some(next) = nodes.iter().find(|n| n.path == path).and_then(|n| n.input.as_ref())
+            && (old.edit.text != next.edit.text || old.edit.anchor != next.edit.anchor || old.edit.focus != next.edit.focus)
+        { self.edit.caret_breath.reset(); }
         for old in &self.tree.nodes {
             if let Some(input) = &old.input
                 && input.edit.focused
