@@ -24,6 +24,7 @@ impl<S: 'static> Runtime<S> {
         if self.playground_nav(ev, one) { return true; }
         if app_first && !self.playground_typing() && let Some(f) = self.on_key && Tx::took(self.app_key(f, ev, one), one) { return true; }
         if self.focused_input().is_some() {
+            self.caret.breath.reset();
             self.input_click.clear_last();
         }
         if let Some(f) = self.focused_input().and_then(|input| input.key.clone())
@@ -173,6 +174,7 @@ impl<S: 'static> Runtime<S> {
             return false;
         };
         let Some(access) = access else { return false };
+        self.caret.breath.reset();
         self.input_click.clear_last();
         {
             let edit = access(states!(self));

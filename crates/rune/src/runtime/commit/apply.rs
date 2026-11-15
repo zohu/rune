@@ -10,7 +10,7 @@ impl<S: 'static> Runtime<S> {
         self.defaults = defaults;
         if crate::tooling::interaction::active() { self.interaction_reused(&memo_reused); }
         let mut scratch = std::mem::take(&mut self.apply_scratch);
-        self.caret_watch = caret_read;
+        self.caret.watched = caret_read;
         let reduced_motion_unchanged = reduced_motion == self.reduced_motion;
         if !reduced_motion_unchanged {
             self.reduced_motion = reduced_motion;

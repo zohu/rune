@@ -649,10 +649,7 @@ pub struct Runtime<S: 'static> {
     /// Files dragged over the window from another app (`drop_dispatch`).
     file_drag: drop_dispatch::FileDrag,
     pub ime_area: Option<[f32; 4]>,
-    /// The focused field's caret (path, window rect) the next view sees through `Cx::caret`.
-    caret: Option<(String, [f32; 4])>,
-    /// The last view read the caret, so it re-runs when the caret moves.
-    caret_watch: bool,
+    caret: caret::Caret,
     /// Keys the last view read with `Cx::layout` or `Cx::layout_size`, and what each resolved to.
     layout_seen: layout_read::LayoutSeen,
     /// Rect last sent to each element's `El::on_layout`.
@@ -1009,8 +1006,7 @@ impl<S: 'static> Runtime<S> {
             hover_hold: Default::default(),
             file_drag: Default::default(),
             ime_area: None,
-            caret: None,
-            caret_watch: false,
+            caret: Default::default(),
             layout_seen: Default::default(),
             layout_fired: HashMap::default(),
             screen_fired: HashMap::default(),

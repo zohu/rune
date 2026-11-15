@@ -51,7 +51,7 @@ impl<S: 'static> Runtime<S> {
             // The view keeps what it last read; `settle_layout_reads` and the caret check run it
             // when the new layout moves them.
             let reads = self.layout_seen.reads.clone();
-            let caret_read = self.caret_watch;
+            let caret_read = self.caret.watched;
             let selection = self.selection_by_path();
             let mut m = self.measurement(true);
             m.layout_reads = reads;
@@ -68,7 +68,7 @@ impl<S: 'static> Runtime<S> {
             let _blend = crate::theme::scope(self.srgb_blend);
             let _bars = crate::platform::scroll_bars::scope(self.scroll_bars.state, self.scroll_bars.runtime_id);
             let reads = self.layout_seen.reads.clone();
-            let caret_read = self.caret_watch;
+            let caret_read = self.caret.watched;
             let selection = self.selection_by_path();
             let mut m = self.measurement(true);
             m.layout_reads = reads;

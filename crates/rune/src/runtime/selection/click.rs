@@ -211,6 +211,7 @@ impl<S: 'static> Runtime<S> {
             self.input_click.drop_drag();
             return false;
         };
+        self.caret.breath.reset();
         let single = self.node(&path).and_then(|n| n.input.as_ref()).is_some_and(|i| i.single_line);
         let layout = self.node(&path).and_then(|n| n.text_layout.clone());
         let s = self.env.scale;

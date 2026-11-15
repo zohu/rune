@@ -64,7 +64,7 @@ impl<S: 'static> Runtime<S> {
             time_scale: self.time_scale,
             defaults: self.defaults,
             titlebar: self.titlebar_set(),
-            caret: self.caret.clone(),
+            caret: self.caret.rect.clone(),
             caret_read: false,
             layout_seen: self.layout_seen.rects.clone(),
             layout_reads: Vec::new(),

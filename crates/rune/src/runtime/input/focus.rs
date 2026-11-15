@@ -190,7 +190,7 @@ impl<S: 'static> Runtime<S> {
     }
     pub(super) fn set_focus(&mut self, path: Option<String>, keyboard: bool) -> bool {
         self.input_click.on_focus_change(path.as_deref());
-        if self.focused != path { self.ime_area = None; self.ime_reset = true; self.blur_links(); self.hover_focus = false; }
+        if self.focused != path { self.caret.breath.reset(); self.ime_area = None; self.ime_reset = true; self.blur_links(); self.hover_focus = false; }
         // Tabbing away or into a field takes the selection's keyboard; a hovered row doesn't.
         if self.focused != path
             && let Some(p) = path.as_deref()
@@ -227,6 +227,12 @@ impl<S: 'static> Runtime<S> {
     }
     pub(super) fn sync_requested_focus(&mut self, nodes: &mut Vec<Node>) -> bool {
         let asked = self.focus_request.take();
+        // External model updates also restart the caret, without copying the text.
+        if let Some(path) = &self.focused
+            && let Some(old) = self.node(path).and_then(|n| n.input.as_ref())
+            && let Some(next) = nodes.iter().find(|n| &n.path == path).and_then(|n| n.input.as_ref())
+            && (old.edit.text != next.edit.text || old.edit.anchor != next.edit.anchor || old.edit.focus != next.edit.focus)
+        { self.caret.breath.reset(); }
         for old in &self.nodes {
             if let Some(input) = &old.input
                 && input.edit.focused

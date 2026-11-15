@@ -23,6 +23,7 @@ pub(crate) use crate::el::tx::{SelectRequest, TraceCalls};
 mod a11y;
 mod anchor;
 mod backdrop;
+pub(crate) mod caret_breathe;
 mod child_exit;
 mod direction;
 pub(crate) mod drop;
@@ -38,6 +39,8 @@ mod focus;
 mod growth;
 mod handler_set;
 mod handlers;
+mod input;
+pub use input::InputSpec;
 mod layout;
 pub(crate) mod layout_watch;
 mod live_colors;
@@ -262,52 +265,6 @@ impl Default for GrowthSpec {
 
 /// The selection highlight until [`El::selection_color`] or [`El::caret`] sets one.
 pub(crate) const DEFAULT_SELECTION: Color = Color { r: 1.0, g: 1.0, b: 1.0, a: 0.2 };
-
-/// A text field bound to a [`TextEdit`] in app state.
-#[derive(Clone)]
-pub struct InputSpec {
-    /// Text edits are immediate, but dependent layout (e.g. filtered results) may animate.
-    pub animate_layout: bool,
-    pub edit: TextEdit,
-    pub placeholder: String,
-    pub placeholder_color: Color,
-    pub caret: Color,
-    pub selection: Color,
-    /// One unwrapped line that scrolls sideways to keep the caret visible, like `<input>`.
-    pub single_line: bool,
-    /// `placeholder_color`, and `caret` with `selection`, came from [`El::placeholder`] and
-    /// [`El::caret`]; the others follow the window's foreground ([`Cx::foreground`](crate::Cx::foreground)).
-    pub(crate) placeholder_inked: bool,
-    pub(crate) caret_inked: bool,
-    pub(crate) revealed_override: Option<bool>,
-    pub(crate) decorations: Vec<Span>,
-    pub(crate) rich_style: crate::edit::RichStyle,
-    pub(crate) pill_icon: Option<PillIconFn>,
-    pub(crate) pill_style: Option<PillStyleFn>,
-    pub(crate) access: Option<EditFn>,
-    pub(crate) submit: Option<PressFn>,
-    pub(crate) key: Option<InputKeyFn>,
-    pub(crate) change: Option<PressFn>,
-    pub(crate) paste: Option<InputPasteFn>,
-    /// `El::spellcheck`: the platform's checker marks misspelled words.
-    pub(crate) spellcheck: bool,
-    /// [`El::selection_style`]: the selection's highlight and ink, by window focus, over `selection`.
-    pub(crate) selection_style: Option<SelectionStyle>,
-}
-
-impl std::fmt::Debug for InputSpec {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("InputSpec")
-            .field("animate_layout", &self.animate_layout)
-            .field("edit", &self.edit)
-            .field("placeholder", &self.placeholder)
-            .field("placeholder_color", &self.placeholder_color)
-            .field("caret", &self.caret)
-            .field("selection", &self.selection)
-            .field("single_line", &self.single_line)
-            .finish_non_exhaustive()
-    }
-}
 
 /// A CSS-style box shadow. Outer shadows draw behind the element; `inset` ones draw inside its
 /// shape, over the fill. A zero-blur, zero-offset outer shadow with a spread is a ring outside
@@ -687,6 +644,7 @@ pub fn text_input(edit: &TextEdit, style: TextStyle) -> El {
         placeholder: String::new(),
         placeholder_color: Color::WHITE.alpha(0.4),
         caret: Color::WHITE,
+        caret_breathe: None,
         selection: DEFAULT_SELECTION,
         single_line: false,
         placeholder_inked: false,

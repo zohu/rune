@@ -341,7 +341,7 @@ fn a_caret_read_the_resize_moves_runs_the_view() {
     assert!(resize(&mut rt, 500.0, 2.0) >= 1);
     let after = content(&rt, "label");
     assert_ne!(after, before);
-    let caret = rt.caret.as_ref().unwrap().1[0];
+    let caret = rt.caret.rect.as_ref().unwrap().1[0];
     assert_eq!(after, format!("{caret}"), "the view shows where the caret is now");
 }
 

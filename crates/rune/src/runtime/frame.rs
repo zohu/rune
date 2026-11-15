@@ -54,6 +54,8 @@ impl<S: 'static> Runtime<S> {
         // Every focus gain, even one a hide without blur left unreported.
         if focused { self.keys_lost = false; }
         if self.window_focused != Some(focused) {
+            self.caret.breath.reset();
+            if self.focused_input().is_some_and(|i| i.caret_breathe.is_some()) { self.dirty = true; }
             // Refocused, the pointer where it was hovers again; blurred, it waits for a move.
             if focused && self.window_focused == Some(false) { self.hover_paused = false; }
             // A focused field's selection takes its active or inactive pair (`El::selection_style`).
@@ -545,7 +547,7 @@ impl<S: 'static> Runtime<S> {
         self.release_files();
         self.schedule_wakes(tx.wakes.drain(..));
         self.capture_flights(&mut tx);
-        if self.caret_watch && self.caret_moved(None) { self.dirty = true; }
+        if self.caret.watched && self.caret_moved(None) { self.dirty = true; }
         let read_moved = self.layout_reads_moved();
         self.reuse.read_moved = read_moved;
         if self.has_pixel_aspect && self.pixel_aspect_changed() { self.relayout = true; }
@@ -611,7 +613,7 @@ impl<S: 'static> Runtime<S> {
         // Explicit destinations processed after a reveal win for its entire lifetime.
         if destination { self.scroll_reveals.clear(); }
         // Those scrolls moved the caret after the commit a view placed from it saw.
-        if self.caret_watch && self.caret_moved(None) { self.commit(&Tx { instant: true, ..Tx::default() }); }
+        if self.caret.watched && self.caret_moved(None) { self.commit(&Tx { instant: true, ..Tx::default() }); }
         if let Some(request) = tx.select.take() {
             let from_change = std::mem::take(&mut tx.select_from_change);
             self.apply_select_request(request, from_change);
@@ -648,7 +650,7 @@ impl<S: 'static> Runtime<S> {
     /// Wakes when a delayed start at animation time `at` comes due, on the loops' wake: the
     /// frame then runs at exactly that time, however long the host slept. A hidden window
     /// sleeps through it; showing it settles.
-    fn wake_for_motion(&mut self, at: f64) {
+    pub(super) fn wake_for_motion(&mut self, at: f64) {
         if !self.surface_visible || self.time_scale <= 0.0 { return; }
         let wake = self.clock + (at - self.t).max(0.0) / self.time_scale as f64;
         if self.loop_wake.is_none_or(|w| wake < w.0) { self.loop_wake = Some((wake, at)); }

@@ -3,6 +3,37 @@
 //! is re-measured in the same commit when an edit moves it.
 use super::*;
 
+#[derive(Default)]
+pub(super) struct Caret {
+    pub rect: Option<(String, [f32; 4])>,
+    pub watched: bool,
+    pub breath: Breath,
+}
+
+#[derive(Default)]
+pub(super) enum Breath {
+    #[default]
+    Reset,
+    Running { owner: NodeId, epoch: f64 },
+}
+
+impl Breath {
+    pub fn reset(&mut self) { *self = Self::Reset; }
+
+    /// The next deadline is a single idle wake; otherwise the visible pulse needs frames.
+    pub fn sample(&mut self, owner: NodeId, now: f64, spec: crate::el::caret_breathe::Spec) -> (f32, Option<f64>) {
+        let epoch = match *self {
+            Self::Running { owner: current, epoch } if current == owner => epoch,
+            _ => { *self = Self::Running { owner, epoch: now }; now }
+        };
+        let elapsed = now - epoch;
+        if elapsed < spec.hold { return (1.0, Some(epoch + spec.hold)); }
+        let phase = (elapsed - spec.hold).rem_euclid(spec.period) / spec.period;
+        let wave = (0.5 + 0.5 * (phase * std::f64::consts::TAU).cos()) as f32;
+        (spec.minimum + (1.0 - spec.minimum) * wave, None)
+    }
+}
+
 impl<S: 'static> Runtime<S> {
     /// Any vertical shift from ancestor growth rows whose presented height has not settled to layout.
     pub(super) fn stack_row_dy(&self, nodes: &[Node], i: usize) -> f32 {
@@ -95,13 +126,13 @@ impl<S: 'static> Runtime<S> {
         let nodes = nodes.unwrap_or(&self.nodes);
         let next = nodes.iter().position(|n| n.input.as_ref().is_some_and(|inp| inp.edit.focused))
             .and_then(|i| Some((i, self.caret_rect(nodes, i)?)));
-        let same = match (&self.caret, next) {
+        let same = match (&self.caret.rect, next) {
             (Some((path, rect)), Some((i, r))) => *path == nodes[i].path && *rect == r,
             (None, None) => true,
             _ => false,
         };
         if same { return false; }
-        self.caret = next.map(|(i, r)| (nodes[i].path.clone(), r));
+        self.caret.rect = next.map(|(i, r)| (nodes[i].path.clone(), r));
         true
     }
 }

@@ -499,7 +499,22 @@ impl<S: 'static> Runtime<S> {
                 *glyph_count += 1;
             }
             if let (Some(c), Some(inp)) = (caret, &n.input) {
-                self.instances.push(rect_inst(c, premul(inp.caret, o, srgb), 0.0, clip, fade));
+                let mut alpha = 1.0;
+                let mut wake = None;
+                if let Some(spec) = inp.caret_breathe {
+                    if self.window_focused == Some(false) {
+                        alpha = 0.0;
+                    } else if self.surface_visible && o * inp.caret.a >= 1.0 / 255.0 && !self.reduced_motion
+                        && !inp.edit.is_composing() && self.time_scale > 0.0 && spec.minimum < 1.0
+                        && c[0] < clip[2] && c[0] + c[2] > clip[0]
+                        && c[1] < clip[3] && c[1] + c[3] > clip[1]
+                    {
+                        (alpha, wake) = self.caret.breath.sample(n.id, now, spec);
+                        self.loops_active |= wake.is_none();
+                    } else { self.caret.breath.reset(); }
+                } else { self.caret.breath.reset(); }
+                self.instances.push(rect_inst(c, premul(inp.caret, o * alpha, srgb), 0.0, clip, fade));
+                if let Some(at) = wake { self.wake_for_motion(at); }
             }
             self.text.set_emit(crate::text::outline::Emit::Atlas);
         }
