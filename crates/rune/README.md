@@ -2377,7 +2377,8 @@ window's edges don't darken. Scrolling, springs and opacity behave as for any pa
 follows the element's presented rect, its opacity fades the blur, and its outer shadows leave the
 blurred interior clear. A still frame doesn't redraw.
 
-A frame blurs at most `MAX_BACKDROP_BLURS` (4) elements; later ones draw only their fill. So do
+A frame blurs at most `MAX_BACKDROP_BLURS` (4) elements, the last ones drawn, so a popup over a
+window full of blurred surfaces keeps its blur; earlier ones draw only their fill. So do
 blurs drawn into a target without `COPY_SRC`, or into a caller's own `wgpu::RenderPass` through
 `Renderer::draw_range`. The web backend asks the canvas for `COPY_SRC`. Inside an ancestor
 drawn as one layer (`El::group_opacity`, `El::blur`, `El::cache`, a rotation) the backdrop is

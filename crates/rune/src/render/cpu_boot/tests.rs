@@ -71,6 +71,8 @@ fn backdrop_blur_cap_matches_gpu() {
     let scene = Scene::new(&instances, &atlas, &images, (w, h), clear).srgb_blend(true).half_rounding(half);
     let bins = Bins::of(&scene);
     assert_eq!(bins.blurs.len(), MAX_BACKDROP_BLURS, "CPU boot must cap backdrop blurs at MAX_BACKDROP_BLURS");
+    let last = instances.len() as u32 - 1;
+    assert_eq!(bins.blurs.iter().map(|(n, _)| *n).collect::<Vec<_>>(), (last + 1 - MAX_BACKDROP_BLURS as u32..=last).collect::<Vec<_>>(), "the topmost records blur");
 
     let mut cpu_px = vec![0u8; (w * h * 4) as usize];
     paint(&scene, &mut Target::new(&mut cpu_px, w, h), 1).expect("CPU paints backdrop blurs");

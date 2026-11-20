@@ -188,7 +188,9 @@ impl Bins {
         }
         let mut blurs = Vec::new();
         let mut quiet = vec![false; tiles];
-        for (n, i) in scene.instances.iter().enumerate().filter(|(_, i)| i.kind() == Some(Kind::BackdropBlur)).take(MAX_BACKDROP_BLURS) {
+        // The topmost records blur, as on the GPU (`Renderer::prepare_backdrop_blur`).
+        let records = || scene.instances.iter().enumerate().filter(|(_, i)| i.kind() == Some(Kind::BackdropBlur));
+        for (n, i) in records().skip(records().count().saturating_sub(MAX_BACKDROP_BLURS)) {
             bounds[n] = super::backdrop::bounds(i, (w, h));
             let Some(rec) = super::backdrop::plan(i, (w, h)) else { continue };
             for t in region_tiles(rec.region, cols, rows) { quiet[t] = true; }

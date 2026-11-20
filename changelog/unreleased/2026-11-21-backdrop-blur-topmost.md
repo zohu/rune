@@ -1,0 +1,1 @@
+- Past `MAX_BACKDROP_BLURS` blurred elements in a frame, the last ones drawn keep their blur instead of the first: a popup, menu or sheet opened over a window that already blurs four surfaces is frosted, and the surface furthest behind draws only its fill. A frame within the cap draws as before.

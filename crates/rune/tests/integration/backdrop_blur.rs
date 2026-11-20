@@ -124,13 +124,14 @@ fn two_bars_each_blur_their_own_backdrop() {
 }
 
 #[test]
-fn bars_past_the_cap_draw_only_their_fill() {
+fn past_the_cap_the_topmost_bars_blur() {
     let bars = (0..rune::MAX_BACKDROP_BLURS + 1).map(|i| Bar { rect: [i as f32 * 40.0, 30.0, 36.0, 60.0], ..BAR }).collect();
     let (rt, px) = render(Scene { bars, blur: true }, 1.0);
-    assert_eq!(records(&rt), rune::MAX_BACKDROP_BLURS);
+    assert_eq!(records(&rt), rune::MAX_BACKDROP_BLURS + 1, "every bar emits its record");
+    assert!(spread(&px, 200, 60, 8, 28) > 200, "the first bar shows what is under it");
+    assert!(spread(&px, 200, 60, 48, 68) <= 3, "the second bar blurs: {}", spread(&px, 200, 60, 48, 68));
     // Near the window edge the clamped taps lean towards the edge stripe.
-    assert!(spread(&px, 200, 60, 8, 28) <= 12, "the first bar blurs: {}", spread(&px, 200, 60, 8, 28));
-    assert!(spread(&px, 200, 60, 168, 188) > 200, "the last bar shows what is under it");
+    assert!(spread(&px, 200, 60, 168, 188) <= 12, "the last bar blurs: {}", spread(&px, 200, 60, 168, 188));
 }
 
 #[test]

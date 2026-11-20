@@ -445,8 +445,10 @@ impl Renderer {
         let viewport = [vw as f32, vh as f32];
         let mut placed = Vec::new();
         let mut need = [STEP; 2];
-        let records = self.effects.iter().filter(|(_, i)| i.kind() == Some(Kind::BackdropBlur)).take(MAX_BACKDROP_BLURS);
-        for (at, i) in records {
+        // Past the cap the topmost records blur: a popup over a full window keeps its blur, and
+        // the surface furthest behind it draws only its fill.
+        let records = || self.effects.iter().filter(|(_, i)| i.kind() == Some(Kind::BackdropBlur));
+        for (at, i) in records().skip(records().count().saturating_sub(MAX_BACKDROP_BLURS)) {
             let Some(plan) = plan_region(i, (vw, vh)) else { continue };
             for k in 0..2 { need[k] = need[k].max(plan.size[k]); }
             placed.push((*at, plan.levels, plan.share, plan.region, plan.origin));
