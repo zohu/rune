@@ -38,6 +38,44 @@ pub enum Family {
     SystemMono,
 }
 
+/// Maximum number of distinct runtime font family names interned by [`Family::named_bounded`].
+const MAX_INTERNED_FAMILIES: usize = 512;
+
+fn intern_bounded(
+    names: &mut std::collections::HashSet<&'static str>,
+    cap: usize,
+    name: &str,
+) -> Option<Family> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if let Some(&known) = names.get(trimmed) {
+        return Some(Family::Named(known));
+    }
+    if names.len() < cap {
+        let leaked: &'static str = Box::leak(trimmed.into());
+        names.insert(leaked);
+        return Some(Family::Named(leaked));
+    }
+    None
+}
+
+impl Family {
+    /// Interns a runtime font family name into a process-wide deduplicated table capped at 512
+    /// distinct names, preserving [`Family`]'s `Copy` representation.
+    ///
+    /// Leading and trailing whitespace is trimmed. Returns `None` for empty or whitespace-only
+    /// names, or once the table has reached capacity for a name not already interned (already
+    /// interned names continue to reuse their pointer even at capacity).
+    pub fn named_bounded(name: &str) -> Option<Family> {
+        static NAMES: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<&'static str>>> =
+            std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+        let mut names = NAMES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        intern_bounded(&mut names, MAX_INTERNED_FAMILIES, name)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum OpticalSize {
     /// Use the run's point size, independent of display scale. Explicit `opsz` variations win.
@@ -218,5 +256,59 @@ pub fn accent(i: usize, dark: bool) -> Color {
         3 => oklch(l + 0.08, 0.16, 58.0),
         4 => oklch(l + 0.04, 0.16, 152.0),
         _ => oklch(l - 0.02, 0.012, 265.0),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn named_bounded_trims_deduplicates_reuses_at_cap_and_caps() {
+        assert_eq!(Family::named_bounded(""), None);
+        assert_eq!(Family::named_bounded("   \t\n "), None);
+
+        let a = Family::named_bounded("  JetBrains Mono  ");
+        let b = Family::named_bounded("JetBrains Mono");
+        match (a, b) {
+            (Some(Family::Named(pa)), Some(Family::Named(pb))) => {
+                assert_eq!(pa, "JetBrains Mono");
+                assert!(std::ptr::eq(pa, pb));
+            }
+            other => panic!("expected reused interned pointer, got {other:?}"),
+        }
+
+        let mut table = std::collections::HashSet::new();
+        assert_eq!(intern_bounded(&mut table, MAX_INTERNED_FAMILIES, ""), None);
+        assert_eq!(intern_bounded(&mut table, MAX_INTERNED_FAMILIES, " \t "), None);
+
+        let first = intern_bounded(&mut table, MAX_INTERNED_FAMILIES, "  Font-0  ");
+        let first_dup = intern_bounded(&mut table, MAX_INTERNED_FAMILIES, "Font-0");
+        match (first, first_dup) {
+            (Some(Family::Named(pa)), Some(Family::Named(pb))) => {
+                assert_eq!(pa, "Font-0");
+                assert!(std::ptr::eq(pa, pb));
+            }
+            other => panic!("expected deduplicated pointer, got {other:?}"),
+        }
+
+        for i in 1..MAX_INTERNED_FAMILIES {
+            let name = format!("Font-{i}");
+            assert!(matches!(
+                intern_bounded(&mut table, MAX_INTERNED_FAMILIES, &name),
+                Some(Family::Named(stored)) if stored == name
+            ));
+        }
+        assert_eq!(table.len(), MAX_INTERNED_FAMILIES);
+
+        // Existing entries still reuse their interned pointer at capacity.
+        match (first, intern_bounded(&mut table, MAX_INTERNED_FAMILIES, "Font-0")) {
+            (Some(Family::Named(pa)), Some(Family::Named(pb))) => assert!(std::ptr::eq(pa, pb)),
+            other => panic!("expected pointer reuse at capacity, got {other:?}"),
+        }
+
+        // New distinct names past capacity return None without growing the table.
+        assert_eq!(intern_bounded(&mut table, MAX_INTERNED_FAMILIES, "Font-Overflow"), None);
+        assert_eq!(table.len(), MAX_INTERNED_FAMILIES);
     }
 }

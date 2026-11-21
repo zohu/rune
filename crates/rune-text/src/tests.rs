@@ -520,3 +520,44 @@ fn run_lookups_off_a_grapheme_start_find_nothing() {
         assert!(out.is_empty());
     }
 }
+
+/// Slot fallbacks and punctuation (`·`, `…`, `≥`) must not eagerly load colour emoji fonts
+/// (such as macOS's ~180 MB `Apple Color Emoji.ttc`), while an actual emoji string loads the
+/// colour emoji fallback on demand and keeps it last in `symbol_families`.
+#[test]
+fn punctuation_skips_colour_emoji_and_emoji_loads_on_demand() {
+    let mut ts = TextSystem::new(&[], ("system-ui", "ui-monospace"));
+    // Simulate a build with `embedded-fonts` disabled so coverage depends on slot fallbacks.
+    ts.clear_own_fonts_for_test();
+    assert!(ts.emoji.is_none(), "slot fallbacks must not eagerly load colour emoji");
+    assert!(!ts.symbol_families.iter().any(|f| f.contains("Emoji")));
+
+    let style = TextStyle::new(13.0, 400.0);
+    let layout = ts.layout_rich("Item · next… threshold ≥ 95%", &[], style, 2.0, None);
+    let mut glyph_count = 0usize;
+    for line in layout.lines() {
+        for item in line.items() {
+            if let PositionedLayoutItem::GlyphRun(run) = item {
+                for g in run.glyphs() {
+                    assert_ne!(g.id, 0, "punctuation/symbol glyph must resolve without tofu");
+                    glyph_count += 1;
+                }
+            }
+        }
+    }
+    assert!(glyph_count > 0);
+    assert!(ts.emoji.is_none(), "punctuation and math operators must not load colour emoji");
+    assert!(!ts.symbol_families.iter().any(|f| f.contains("Emoji")));
+
+    // Now render an emoji string and verify the colour emoji fallback loads on demand.
+    let emoji_layout = ts.layout_rich("Launch 🚀", &[], style, 2.0, None);
+    let mut quads = Vec::new();
+    ts.glyphs_for_layout(&emoji_layout, 2.0, [0.0, 0.0], false, &mut quads);
+    if cfg!(target_os = "macos") && !system_font_files(&["applecoloremoji"]).is_empty() {
+        assert_eq!(ts.emoji, Some("Apple Color Emoji"));
+        assert_eq!(ts.symbol_families.last(), Some(&"Apple Color Emoji"));
+        assert_eq!(quads.iter().filter(|q| q.color != 0).count(), 1);
+    } else if let Some(emoji) = ts.emoji {
+        assert_eq!(ts.symbol_families.last(), Some(&emoji));
+    }
+}

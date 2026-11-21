@@ -39,6 +39,14 @@ impl El {
         { self.handlers.sites.layout = Some(std::panic::Location::caller()); }
         self
     }
+    /// [`El::on_layout`] for a component that doesn't read the app's state, so it works in any app.
+    #[track_caller]
+    pub fn on_layout_any(mut self, f: impl Fn([f32; 4]) + 'static) -> Self {
+        self.handlers.on_layout = Some(Rc::new(move |_, r, _| f(r)));
+        #[cfg(debug_assertions)]
+        { self.handlers.sites.layout = Some(std::panic::Location::caller()); }
+        self
+    }
     /// [`El::on_layout`] with a [`Tx`]. A handler that only moves live values (a marker beside
     /// a scrolling row, by its own [`El::live_offset`]) says [`Tx::live_only`], and a scroll
     /// runs no view.
@@ -52,6 +60,14 @@ impl El {
     #[track_caller]
     pub fn on_layout_tx<S: 'static>(mut self, f: impl Fn(&mut S, [f32; 4], &mut Tx) + 'static) -> Self {
         self.handlers.on_layout = Some(Rc::new(move |s, r, tx| f(downcast::<S>(s), r, tx)));
+        #[cfg(debug_assertions)]
+        { self.handlers.sites.layout = Some(std::panic::Location::caller()); }
+        self
+    }
+    /// [`El::on_layout_tx`] for a component that doesn't read the app's state, so it works in any app.
+    #[track_caller]
+    pub fn on_layout_tx_any(mut self, f: impl Fn([f32; 4], &mut Tx) + 'static) -> Self {
+        self.handlers.on_layout = Some(Rc::new(move |_, r, tx| f(r, tx)));
         #[cfg(debug_assertions)]
         { self.handlers.sites.layout = Some(std::panic::Location::caller()); }
         self
@@ -104,6 +120,14 @@ impl El {
         { self.handlers.sites.drawn_layout = Some(std::panic::Location::caller()); }
         self
     }
+    /// [`El::on_drawn_layout_tx`] for a component that doesn't read the app's state, so it works in any app.
+    #[track_caller]
+    pub fn on_drawn_layout_tx_any(mut self, f: impl Fn([f32; 4], &mut Tx) + 'static) -> Self {
+        self.handlers.on_drawn_layout = Some(Rc::new(move |_, r, tx| f(r, tx)));
+        #[cfg(debug_assertions)]
+        { self.handlers.sites.drawn_layout = Some(std::panic::Location::caller()); }
+        self
+    }
     /// Called with `true` when this element comes on screen and `false` when it leaves, as a
     /// web page's `IntersectionObserver` reports: on screen is half of it showing in the window
     /// (or it covering half the window), where the frame drew it after scroll viewports and a
@@ -112,6 +136,11 @@ impl El {
     /// reader reaches it, or to stop a loop nobody can see.
     pub fn on_visible<S: 'static>(mut self, f: impl Fn(&mut S, bool, &mut Tx) + 'static) -> Self {
         self.handlers.on_visible = Some(Rc::new(move |s, on, tx| f(downcast::<S>(s), on, tx)));
+        self
+    }
+    /// [`El::on_visible`] for a component that doesn't read the app's state, so it works in any app.
+    pub fn on_visible_any(mut self, f: impl Fn(bool, &mut Tx) + 'static) -> Self {
+        self.handlers.on_visible = Some(Rc::new(move |_, on, tx| f(on, tx)));
         self
     }
     /// Writes where each frame draws this element into `rect`: `[x, y, w, h]` in window points,
