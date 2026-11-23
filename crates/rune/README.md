@@ -2131,6 +2131,9 @@ and its goldens are unchanged. `examples/lab` uses it to composite `rune-light` 
 - `El::mark(u32)` tags an element's instances, and its descendants' until one sets its own.
   While a compositor is attached, `Runtime::marks` runs parallel to `Runtime::instances` (no marks
   are recorded otherwise). The lab encodes canvas, lighting material and effect node in the mark.
+- The `Frame` borrows the GPU instance and adapter that created its device. An embedded
+  renderer can share the window's instance, adapter, device and queue, then recreate its
+  device-owned resources when `Frame::device_key()` changes.
 - The `Frame` gives the device, queue, encoder, target view and format, `dt`, the time
   `Runtime::frame` took (`update_ms`), the runtime (instances, marks, clock `t`, pointer, state,
   `presented(key)` → drawn rect and effective opacity), and Rune's `Renderer`.

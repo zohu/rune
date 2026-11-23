@@ -267,6 +267,8 @@ impl<S: 'static> EmbedSurface for LayerHost<S> {
     fn render(&mut self, prepared: &mut PreparedEmbedFrame, dt: f64, update_ms: f64) -> bool {
         if let Some(comp) = &mut self.compositor {
             let mut f = Frame {
+                instance: &self.core.gpu.instance,
+                adapter: &self.core.gpu.adapter,
                 device: &self.core.gpu.device,
                 queue: &self.core.gpu.queue,
                 encoder: &mut prepared.encoder,

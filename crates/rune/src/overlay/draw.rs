@@ -334,6 +334,8 @@ impl FrameHost for OverlayFrame<'_> {
         let target = live.alpha.as_ref().map_or(&prepared.view, |a| &a.view);
         let comp_animating = if self.app.has_compositor() {
             self.app.render_compositor(OverlayRenderArgs {
+                instance: &gpu.instance,
+                adapter: &gpu.adapter,
                 device: &gpu.device,
                 queue: &gpu.queue,
                 encoder: &mut prepared.encoder,
@@ -640,6 +642,8 @@ impl OverlayCore {
         let view = target.create_view(&Default::default());
         let mut enc = gpu.device.create_command_encoder(&Default::default());
         render_frame(app, OverlayRenderArgs {
+            instance: &gpu.instance,
+            adapter: &gpu.adapter,
             device: &gpu.device, queue: &gpu.queue, encoder: &mut enc,
             target: &view, format: renderer.format(), size,
             dt: 0.0, update_ms: 0.0, ui: renderer,

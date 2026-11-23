@@ -13,6 +13,8 @@ use crate::window::Presented;
 /// Non-generic arguments passed to [`OverlayApp::render_compositor`], which constructs
 /// [`crate::compose::Frame<'_, T>`] in place.
 pub(super) struct OverlayRenderArgs<'a> {
+    pub instance: &'a wgpu::Instance,
+    pub adapter: &'a wgpu::Adapter,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
     pub encoder: &'a mut wgpu::CommandEncoder,

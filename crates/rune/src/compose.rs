@@ -70,6 +70,11 @@ pub trait Compositor<S: 'static>: 'static {
 
 /// One frame handed to a compositor.
 pub struct Frame<'a, S: 'static> {
+    /// The instance and adapter that created this frame's device. External renderers can
+    /// share them with the device and queue and rebuild their resources when the device key changes.
+    pub instance: &'a wgpu::Instance,
+    /// The adapter selected by this window's renderer.
+    pub adapter: &'a wgpu::Adapter,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
     pub encoder: &'a mut wgpu::CommandEncoder,

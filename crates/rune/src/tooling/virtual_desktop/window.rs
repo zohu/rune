@@ -83,6 +83,8 @@ pub(crate) trait Member {
 }
 
 struct DesktopRenderArgs<'a> {
+    instance: &'a wgpu::Instance,
+    adapter: &'a wgpu::Adapter,
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
     encoder: &'a mut wgpu::CommandEncoder,
@@ -173,6 +175,8 @@ impl<S: 'static> DesktopApp for TypedDesktopApp<S> {
     fn render_compositor(&mut self, args: DesktopRenderArgs<'_>) -> bool {
         let Some(c) = self.comp.as_mut() else { return false };
         let mut f = Frame {
+            instance: args.instance,
+            adapter: args.adapter,
             device: args.device,
             queue: args.queue,
             encoder: args.encoder,
@@ -710,6 +714,8 @@ impl FrameHost for DesktopFrame<'_> {
         let renderer = self.window.renderer.as_mut().expect("renderer ensured by pre-reblend");
         if self.window.app.has_compositor() {
             self.window.app.render_compositor(DesktopRenderArgs {
+                instance: &self.gpu.instance,
+                adapter: &self.gpu.adapter,
                 device: &self.gpu.device,
                 queue: &self.gpu.queue,
                 encoder,

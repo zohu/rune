@@ -198,6 +198,8 @@ impl<T: 'static> OverlayApp for TypedOverlayApp<T> {
     fn render_compositor(&mut self, args: OverlayRenderArgs<'_>) -> bool {
         let Some(c) = self.compositor.as_mut() else { return false };
         let mut f = Frame {
+            instance: args.instance,
+            adapter: args.adapter,
             device: args.device,
             queue: args.queue,
             encoder: args.encoder,
@@ -324,6 +326,8 @@ impl<T: 'static> OverlayApp for BorrowOverlayApp<'_, T> {
     fn render_compositor(&mut self, args: OverlayRenderArgs<'_>) -> bool {
         let Some(c) = self.compositor.as_mut() else { return false };
         let mut f = Frame {
+            instance: args.instance,
+            adapter: args.adapter,
             device: args.device,
             queue: args.queue,
             encoder: args.encoder,
@@ -417,6 +421,8 @@ impl<T: 'static> Overlay<T> {
         with_app!(self, |core, app| {
             let renderer = core.renderer.as_mut().unwrap();
             super::frame::render_frame(&mut app, OverlayRenderArgs {
+                instance: &gpu.instance,
+                adapter: &gpu.adapter,
                 device: &gpu.device, queue: &gpu.queue, encoder: enc, target, format, size, dt, update_ms: 0.0, ui: renderer,
             })
         })

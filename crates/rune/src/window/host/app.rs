@@ -17,6 +17,8 @@ use crate::time::Instant;
 /// Non-generic arguments passed to [`WindowApp::render_compositor`], which constructs
 /// [`Frame<'_, S>`] in place.
 pub(in crate::window) struct CompositorFrame<'a> {
+    pub instance: &'a wgpu::Instance,
+    pub adapter: &'a wgpu::Adapter,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
     pub encoder: &'a mut wgpu::CommandEncoder,
@@ -274,6 +276,8 @@ impl<S: 'static> WindowApp for TypedWindowApp<S> {
     fn render_compositor(&mut self, args: CompositorFrame<'_>) -> bool {
         let Some(c) = self.comp.as_mut() else { return false };
         let mut f = Frame {
+            instance: args.instance,
+            adapter: args.adapter,
             device: args.device,
             queue: args.queue,
             encoder: args.encoder,

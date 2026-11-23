@@ -11,6 +11,8 @@ use crate::runtime::{AppDriver, Runtime, RuntimeCore};
 use crate::tooling::{Kind, script_input};
 
 pub(super) struct HeadlessRenderArgs<'a> {
+    pub instance: &'a wgpu::Instance,
+    pub adapter: &'a wgpu::Adapter,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
     pub encoder: &'a mut wgpu::CommandEncoder,
@@ -93,6 +95,8 @@ impl<S: 'static> HeadlessApp for TypedHeadlessApp<S> {
     fn render_compositor(&mut self, args: HeadlessRenderArgs<'_>) -> bool {
         let Some(c) = self.comp.as_mut() else { return false };
         let mut f = Frame {
+            instance: args.instance,
+            adapter: args.adapter,
             device: args.device,
             queue: args.queue,
             encoder: args.encoder,
