@@ -261,10 +261,7 @@ impl Host {
         let size = (l.config.width, l.config.height);
         if self.app.has_compositor() {
             let _ = self.app.render_compositor(CompositorFrame {
-                instance: &gpu.instance,
-                adapter: &gpu.adapter,
-                device: &gpu.device,
-                queue: &gpu.queue,
+                gpu,
                 encoder: &mut enc,
                 target: &view,
                 format: target_format,

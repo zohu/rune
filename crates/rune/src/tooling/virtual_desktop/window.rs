@@ -5,7 +5,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 
 use crate::app::{Shared, SharedCore, WindowRequest, WindowRequests};
-use crate::compose::{Compositor, Frame};
+use crate::compose::Compositor;
 use crate::desktop::Slot;
 use crate::desktop::displays::VirtualDesktop;
 use crate::el::Shell;
@@ -82,19 +82,7 @@ pub(crate) trait Member {
     fn summary(&mut self, device: &wgpu::Device) -> Option<String>;
 }
 
-struct DesktopRenderArgs<'a> {
-    instance: &'a wgpu::Instance,
-    adapter: &'a wgpu::Adapter,
-    device: &'a wgpu::Device,
-    queue: &'a wgpu::Queue,
-    encoder: &'a mut wgpu::CommandEncoder,
-    target: &'a wgpu::TextureView,
-    format: wgpu::TextureFormat,
-    size: (u32, u32),
-    dt: f64,
-    update_ms: f64,
-    ui: &'a mut Renderer,
-}
+use crate::compose::FrameArgs as DesktopRenderArgs;
 
 trait DesktopApp {
     fn rt(&self) -> &RuntimeCore;
@@ -174,21 +162,7 @@ impl<S: 'static> DesktopApp for TypedDesktopApp<S> {
     }
     fn render_compositor(&mut self, args: DesktopRenderArgs<'_>) -> bool {
         let Some(c) = self.comp.as_mut() else { return false };
-        let mut f = Frame {
-            instance: args.instance,
-            adapter: args.adapter,
-            device: args.device,
-            queue: args.queue,
-            encoder: args.encoder,
-            target: args.target,
-            format: args.format,
-            size: args.size,
-            dt: args.dt,
-            update_ms: args.update_ms,
-            rt: &mut self.rt,
-            ui: args.ui,
-        };
-        c.render(&mut f);
+        c.render(&mut args.with_runtime(&mut self.rt));
         c.animating()
     }
     fn compositor_summary(&mut self, device: &wgpu::Device) -> Option<String> {
@@ -714,10 +688,7 @@ impl FrameHost for DesktopFrame<'_> {
         let renderer = self.window.renderer.as_mut().expect("renderer ensured by pre-reblend");
         if self.window.app.has_compositor() {
             self.window.app.render_compositor(DesktopRenderArgs {
-                instance: &self.gpu.instance,
-                adapter: &self.gpu.adapter,
-                device: &self.gpu.device,
-                queue: &self.gpu.queue,
+                gpu: self.gpu,
                 encoder,
                 target: view,
                 format,

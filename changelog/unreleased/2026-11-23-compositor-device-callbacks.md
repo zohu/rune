@@ -1,0 +1,1 @@
+- Native compositors can restore Rune's device-loss and uncaptured-error handlers after an embedded renderer installs its own on the shared device.

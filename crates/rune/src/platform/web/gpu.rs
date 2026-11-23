@@ -251,10 +251,7 @@ pub(super) fn gpu_frame(side: &mut GpuSide, app: &mut dyn WebApp, now: Instant, 
     } else if app.has_compositor() {
         let target = frame.texture.create_view(&wgpu::TextureViewDescriptor { format: Some(side.renderer.format()), ..Default::default() });
         app.render_compositor(CompositorFrame {
-            instance: &side.gpu.instance,
-            adapter: &side.gpu.adapter,
-            device: &side.gpu.device,
-            queue: &side.gpu.queue,
+            gpu: &side.gpu,
             encoder: &mut encoder,
             target: &target,
             format: side.renderer.format(),

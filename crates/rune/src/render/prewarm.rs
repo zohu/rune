@@ -35,7 +35,7 @@ impl Slot {
         let thread = std::thread::Builder::new().name("rune-gpu-prewarm".into()).spawn(|| {
             objc2::rc::autoreleasepool(|_| {
                 super::gpu_events::starting();
-                let gpu = Gpu::try_new(Gpu::instance(), None).ok()?;
+                let gpu = Gpu::try_for_display(Gpu::instance(), wgpu::Features::empty()).ok()?;
                 #[cfg(test)]
                 let loads_before = super::metallib::thread_loads();
                 let renderer = Renderer::new(&gpu.device, FORMAT);

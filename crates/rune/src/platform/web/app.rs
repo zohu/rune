@@ -6,28 +6,13 @@ use std::sync::Arc;
 use wasm_bindgen::JsValue;
 
 use crate::app::{OnWindow, Shared, SharedCore};
-use crate::compose::{Compositor, Frame};
+use crate::compose::Compositor;
 use crate::frame::clock::FrameClock;
-use crate::render::Renderer;
 use crate::runtime::{AppDriver, Runtime, RuntimeCore};
 use crate::time::Instant;
 use crate::{App, Env, Waker};
 
-/// Non-generic arguments passed to [`WebApp::render_compositor`], which constructs
-/// [`Frame<'_, S>`] in place.
-pub(super) struct CompositorFrame<'a> {
-    pub instance: &'a wgpu::Instance,
-    pub adapter: &'a wgpu::Adapter,
-    pub device: &'a wgpu::Device,
-    pub queue: &'a wgpu::Queue,
-    pub encoder: &'a mut wgpu::CommandEncoder,
-    pub target: &'a wgpu::TextureView,
-    pub format: wgpu::TextureFormat,
-    pub size: (u32, u32),
-    pub dt: f64,
-    pub update_ms: f64,
-    pub ui: &'a mut Renderer,
-}
+pub(super) use crate::compose::FrameArgs as CompositorFrame;
 
 /// What [`PendingApp::start`] produces once fonts (and any initial GPU) are ready.
 pub(super) struct StartedWebApp {
@@ -271,21 +256,7 @@ impl<S: 'static> WebApp for TypedWebApp<S> {
 
     fn render_compositor(&mut self, args: CompositorFrame<'_>) {
         let Some(c) = self.compositor.as_mut() else { return };
-        let mut f = Frame {
-            instance: args.instance,
-            adapter: args.adapter,
-            device: args.device,
-            queue: args.queue,
-            encoder: args.encoder,
-            target: args.target,
-            format: args.format,
-            size: args.size,
-            dt: args.dt,
-            update_ms: args.update_ms,
-            rt: &mut self.rt,
-            ui: args.ui,
-        };
-        c.render(&mut f);
+        c.render(&mut args.with_runtime(&mut self.rt));
     }
 
     fn paste_event(&mut self, clipboard: &crate::clipboard::Client, content: crate::ClipboardContent, image: Option<&JsValue>) {

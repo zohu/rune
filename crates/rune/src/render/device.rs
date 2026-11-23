@@ -13,6 +13,8 @@ pub struct Gpu {
     /// Windows' Modern Standby) can't configure a surface, and wgpu drops that error, so nothing
     /// else would report it. See `is_lost`.
     pub(super) lost: Arc<AtomicBool>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) uncaptured: Arc<dyn wgpu::UncapturedErrorHandler>,
 }
 
 /// The most views and buffers a device binds at once (`Limits::max_non_sampler_bindings`).
@@ -47,8 +49,8 @@ impl Gpu {
     }
 
     /// A device for a surface not made yet (`warm_gpu`): on the adapter a surface would get.
-    #[cfg(not(any(target_arch = "wasm32", target_os = "macos")))]
-    pub(super) fn try_for_display(instance: wgpu::Instance, wanted: wgpu::Features) -> Result<Gpu, String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn try_for_display(instance: wgpu::Instance, wanted: wgpu::Features) -> Result<Gpu, String> {
         Self::try_picked(instance, None, wanted, false, true)
     }
 
