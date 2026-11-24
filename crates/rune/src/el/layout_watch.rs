@@ -176,6 +176,14 @@ impl El {
         { self.handlers.sites.drawn_layout = Some(std::panic::Location::caller()); }
         self
     }
+    /// [`El::on_drawn_layout_tx`] for a component that doesn't read the app's state.
+    #[track_caller]
+    pub fn on_drawn_layout_tx_any(mut self, f: impl Fn([f32; 4], &mut Tx) + 'static) -> Self {
+        self.handlers.on_drawn_layout = Some(Rc::new(move |_, r, tx| f(r, tx)));
+        #[cfg(debug_assertions)]
+        { self.handlers.sites.drawn_layout = Some(std::panic::Location::caller()); }
+        self
+    }
     /// Called with `true` when this element comes on screen and `false` when it leaves, as a
     /// web page's `IntersectionObserver` reports: on screen is half of it showing in the window
     /// (or it covering half the window), where the frame drew it after scroll viewports and a
