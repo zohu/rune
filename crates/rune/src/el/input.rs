@@ -13,6 +13,7 @@ pub struct InputSpec {
     /// [`El::placeholder_font`]: the placeholder's own style, as CSS's `::placeholder`; else the field's.
     pub placeholder_style: Option<TextStyle>,
     pub caret: Color,
+    pub(crate) caret_breathe: Option<caret_breathe::Spec>,
     pub selection: Color,
     /// One unwrapped line that scrolls sideways to keep the caret visible, like `<input>`.
     pub single_line: bool,
@@ -49,6 +50,7 @@ impl std::fmt::Debug for InputSpec {
             .field("placeholder", &self.placeholder)
             .field("placeholder_color", &self.placeholder_color)
             .field("caret", &self.caret)
+            .field("caret_breathe", &self.caret_breathe)
             .field("selection", &self.selection)
             .field("single_line", &self.single_line)
             .finish_non_exhaustive()
@@ -82,6 +84,7 @@ pub fn text_input(edit: &TextEdit, style: TextStyle) -> El {
         placeholder_color: Color::WHITE.alpha(0.4),
         placeholder_style: None,
         caret: Color::WHITE,
+        caret_breathe: None,
         selection: DEFAULT_SELECTION,
         single_line: false,
         placeholder_inked: false,

@@ -465,6 +465,7 @@ impl RuntimeCore {
         for effect in self.kbd.focus.step(focus_machine::FocusEvent::Set { path, keyboard, keep_entry }) {
             match effect {
                 focus_machine::FocusEffect::Moved => {
+                    self.edit.caret_breath.reset();
                     self.ime_area = None;
                     self.edit.ime_reset = true;
                     self.edit.blur_links();
@@ -497,6 +498,16 @@ impl RuntimeCore {
         };
         if blurred { self.kbd.focus_before_commit = None; }
         let waits = asked.as_ref().filter(|(.., ask)| *ask == crate::el::FocusAsk::WhenShown).map(|(key, ring, _)| (key.clone(), *ring));
+        // A model update can move the insertion point without going through input routing.
+        if let Some(path) = self.kbd.focus.path()
+            && let Some(old) = self.node(path).and_then(|n| n.input.as_ref())
+            && let Some(next) = nodes.iter().find(|n| n.path == path).and_then(|n| n.input.as_ref())
+            && next.caret_breathe.is_some()
+            && (old.edit.text != next.edit.text || old.edit.anchor != next.edit.anchor
+                || old.edit.focus != next.edit.focus || old.edit.affinity != next.edit.affinity)
+        {
+            self.edit.caret_breath.reset();
+        }
         self.kbd.record_unmounted_focused(&self.tree.nodes, nodes, &self.commit.virtual_inputs);
         let within = |path: &str, root: &str| {
             path == root || (path.len() > root.len() && path.starts_with(root) && path.as_bytes()[root.len()] == b'/')
