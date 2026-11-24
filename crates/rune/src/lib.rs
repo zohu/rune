@@ -135,6 +135,7 @@ pub use el::rule;
 pub use el::spacer;
 pub use el::text;
 pub use el::text_input;
+pub use el::virtual_list::items::VirtualItems;
 pub use file_dialog::FileDialogError;
 pub use file_dialog::FileDialogFilesResult;
 pub use file_dialog::FileDialogKind;

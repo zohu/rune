@@ -1,0 +1,1 @@
+- Virtual windows remount retained items and rows without rebuilding the root inside Playground when Story state and Playground controls are unchanged. Applying Playground requests invalidates retained measurement so navigation and settings still rebuild the stage. Hot sessions keep their full rebuild path.

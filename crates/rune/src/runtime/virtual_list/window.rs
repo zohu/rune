@@ -40,7 +40,7 @@ impl types::TreeState {
 
 impl RuntimeCore {
     pub(in crate::runtime) fn virtual_window_changed(&self) -> bool {
-        self.commit.virtuals.iter().any(|(path, v)| self.wants_window(path, v))
+        self.item_window_changed() || self.commit.virtuals.iter().any(|(path, v)| self.wants_window(path, v))
     }
 
     /// Whether any live virtual list's viewport reaches past its mounted rows, leaving part of it
@@ -183,8 +183,13 @@ impl RuntimeCore {
     /// Whether an index-built list still mounts its overscan a little per frame, so the host
     /// should draw another. Each such frame commits more rows; a few frames fill it. A list
     /// whose heights keep changing past those frames waits a few frames out and resumes, until
-    /// the unfilled range stops shrinking.
+    /// the unfilled range stops shrinking. Item windows keep drawing while admitting new keys.
     pub(in crate::runtime) fn virtual_filling(&mut self) -> bool {
+        let rows_filling = self.rows_filling();
+        rows_filling || self.item_window_changed()
+    }
+
+    fn rows_filling(&mut self) -> bool {
         let now = self.clock;
         let (wanted, moved) = self.virtual_demand();
         // A wake must draw nothing for a list that finished, unmounted or stopped filling: it

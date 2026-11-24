@@ -2,6 +2,7 @@
 use super::*;
 
 pub(super) mod fill;
+pub(super) mod items;
 #[cfg(test)]
 mod fill_resume_tests;
 #[cfg(test)]
