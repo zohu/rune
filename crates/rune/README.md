@@ -2455,6 +2455,14 @@ and its goldens are unchanged. `examples/lab` uses it to composite `rune-light` 
 - The `Frame` gives the device, queue, encoder, target view and format, `dt`, the time
   `Runtime::frame` took (`update_ms`), the runtime (instances, marks, clock `t`, pointer, state,
   `presented(key)` → drawn rect and effective opacity), and Rune's `Renderer`.
+- A `Frame` also borrows the GPU instance and adapter that created its device. An embedded
+  renderer can share these handles with the device and queue. On native targets, call
+  `frame.restore_device_callbacks()` after initializing an embedded renderer that installs its
+  own wgpu device callbacks, including when initializing it on a replacement device. This
+  restores Rune's device-loss notification and the host's uncaptured-error policy.
+- Implement `Compositor::release_gpu` to drop device-owned resources before Rune creates a
+  replacement device. This includes resources owned by embedded renderers and compositors you
+  wrap. Rebuild resources on the next frame as needed using `Frame::device_key()`.
 - `Renderer::prepare_lists` uploads several instance lists in one buffer (one glyph upload) and
   returns their ranges; `encode_layers` records isolated groups before the containing pass;
   `draw_range` draws complete scopes into that pass; `add_format` builds the uber

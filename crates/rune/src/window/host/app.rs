@@ -6,27 +6,14 @@ use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use winit::window::Window;
 
 use crate::app::{Shared, TurnScope, WindowRequests};
-use crate::compose::{Compositor, Frame};
+use crate::compose::Compositor;
 use crate::el::Tx;
 use crate::frame::clock::FrameClock;
 use crate::frame::encoded::OnFrameDrawn;
-use crate::render::Renderer;
 use crate::runtime::{AppDriver, Runtime, RuntimeCore};
 use crate::time::Instant;
 
-/// Non-generic arguments passed to [`WindowApp::render_compositor`], which constructs
-/// [`Frame<'_, S>`] in place.
-pub(crate) struct CompositorFrame<'a> {
-    pub device: &'a wgpu::Device,
-    pub queue: &'a wgpu::Queue,
-    pub encoder: &'a mut wgpu::CommandEncoder,
-    pub target: &'a wgpu::TextureView,
-    pub format: wgpu::TextureFormat,
-    pub size: (u32, u32),
-    pub dt: f64,
-    pub update_ms: f64,
-    pub ui: &'a mut Renderer,
-}
+pub(crate) use crate::compose::FrameArgs as CompositorFrame;
 
 /// Everything the non-generic window host needs of its typed app state `S`.
 pub(crate) trait WindowApp {
@@ -349,19 +336,7 @@ impl<S: 'static> WindowApp for TypedWindowApp<S> {
 
     fn render_compositor(&mut self, args: CompositorFrame<'_>) -> bool {
         let Some(c) = self.comp.as_mut() else { return false };
-        let mut f = Frame {
-            device: args.device,
-            queue: args.queue,
-            encoder: args.encoder,
-            target: args.target,
-            format: args.format,
-            size: args.size,
-            dt: args.dt,
-            update_ms: args.update_ms,
-            rt: &mut self.rt,
-            ui: args.ui,
-        };
-        c.render(&mut f);
+        c.render(&mut args.with_runtime(&mut self.rt));
         c.animating()
     }
 

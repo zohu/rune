@@ -462,8 +462,7 @@ pub(super) fn encode_gpu_frame(
     } else if app.has_compositor() {
         let target = prepared.frame.texture.create_view(&wgpu::TextureViewDescriptor { format: Some(side.renderer.format()), ..Default::default() });
         app.render_compositor(CompositorFrame {
-            device: &side.gpu.device,
-            queue: &side.gpu.queue,
+            gpu: &side.gpu,
             encoder: &mut prepared.encoder,
             target: &target,
             format: side.renderer.format(),

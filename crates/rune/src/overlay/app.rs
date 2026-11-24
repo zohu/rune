@@ -18,7 +18,7 @@ use super::frame::OverlayRenderArgs;
 use super::{OverlayCore, OverlayHandle, Placement, Shared, SharedCore};
 #[cfg(test)]
 use super::requests::Update;
-use crate::compose::{Compositor, Frame};
+use crate::compose::Compositor;
 use crate::el::Tx;
 use crate::frame::clock::FrameClock;
 use crate::runtime::{AppDriver, Env, Runtime, RuntimeCore, Waker};
@@ -197,19 +197,7 @@ impl<T: 'static> OverlayApp for TypedOverlayApp<T> {
 
     fn render_compositor(&mut self, args: OverlayRenderArgs<'_>) -> bool {
         let Some(c) = self.compositor.as_mut() else { return false };
-        let mut f = Frame {
-            device: args.device,
-            queue: args.queue,
-            encoder: args.encoder,
-            target: args.target,
-            format: args.format,
-            size: args.size,
-            dt: args.dt,
-            update_ms: args.update_ms,
-            rt: &mut self.rt,
-            ui: args.ui,
-        };
-        c.render(&mut f);
+        c.render(&mut args.with_runtime(&mut self.rt));
         c.animating()
     }
 
@@ -345,19 +333,7 @@ impl<T: 'static> OverlayApp for BorrowOverlayApp<'_, T> {
     }
     fn render_compositor(&mut self, args: OverlayRenderArgs<'_>) -> bool {
         let Some(c) = self.compositor.as_mut() else { return false };
-        let mut f = Frame {
-            device: args.device,
-            queue: args.queue,
-            encoder: args.encoder,
-            target: args.target,
-            format: args.format,
-            size: args.size,
-            dt: args.dt,
-            update_ms: args.update_ms,
-            rt: &mut *self.rt,
-            ui: args.ui,
-        };
-        c.render(&mut f);
+        c.render(&mut args.with_runtime(self.rt));
         c.animating()
     }
 
@@ -460,7 +436,7 @@ impl<T: 'static> Overlay<T> {
         with_app!(self, |core, app| {
             let renderer = core.renderer.as_mut().unwrap();
             super::frame::render_frame(&mut app, OverlayRenderArgs {
-                device: &gpu.device, queue: &gpu.queue, encoder: enc, target, format, size, dt, update_ms: 0.0, ui: renderer,
+                gpu, encoder: enc, target, format, size, dt, update_ms: 0.0, ui: renderer,
             })
         })
     }

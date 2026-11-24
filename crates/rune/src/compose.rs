@@ -3,7 +3,7 @@
 //! builds one, so the default path is unchanged; `rune::run_with` or `App::compositor` attaches
 //! one.
 
-use crate::render::{Instance, Kind, Renderer};
+use crate::render::{Gpu, Instance, Kind, Renderer};
 use crate::runtime::Runtime;
 
 /// Draws a frame in place of Rune's default.
@@ -79,8 +79,39 @@ pub trait Compositor<S: 'static>: 'static {
     }
 }
 
+/// The host's render target and timing before it borrows the app's typed runtime.
+pub(crate) struct FrameArgs<'a> {
+    pub gpu: &'a Gpu,
+    pub encoder: &'a mut wgpu::CommandEncoder,
+    pub target: &'a wgpu::TextureView,
+    pub format: wgpu::TextureFormat,
+    pub size: (u32, u32),
+    pub dt: f64,
+    pub update_ms: f64,
+    pub ui: &'a mut Renderer,
+}
+
+impl<'a> FrameArgs<'a> {
+    pub(crate) fn with_runtime<S: 'static>(self, rt: &'a mut Runtime<S>) -> Frame<'a, S> {
+        let Self { gpu, encoder, target, format, size, dt, update_ms, ui } = self;
+        Frame {
+            #[cfg(not(target_arch = "wasm32"))]
+            gpu,
+            instance: &gpu.instance, adapter: &gpu.adapter, device: &gpu.device, queue: &gpu.queue,
+            encoder, target, format, size, dt, update_ms, rt, ui,
+        }
+    }
+}
+
 /// One frame handed to a compositor.
 pub struct Frame<'a, S: 'static> {
+    #[cfg(not(target_arch = "wasm32"))]
+    gpu: &'a Gpu,
+    /// The instance and adapter that created this frame's device. External renderers can
+    /// share them with the device and queue and rebuild their resources when the device key changes.
+    pub instance: &'a wgpu::Instance,
+    /// The adapter selected by this window's renderer.
+    pub adapter: &'a wgpu::Adapter,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
     pub encoder: &'a mut wgpu::CommandEncoder,
@@ -118,6 +149,14 @@ impl<S: 'static> Frame<'_, S> {
     /// The device `device` is, as a key that changes whenever the frame moves to another one.
     pub fn device_key(&self) -> DeviceKey {
         self.ui.device_key()
+    }
+
+    /// Reinstalls Rune's native device-loss and uncaptured-error handlers. Call this once after
+    /// initializing an external renderer that replaces callbacks on this shared device, and
+    /// again if that renderer is initialized on a replacement device.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn restore_device_callbacks(&self) {
+        self.gpu.restore_device_callbacks();
     }
 
     /// True when the frame is sRGB-blended (`App::srgb_blend`): `target` is a non-sRGB view and

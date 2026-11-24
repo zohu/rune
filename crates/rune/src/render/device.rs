@@ -17,6 +17,8 @@ pub struct Gpu {
     pub(super) lost: Arc<AtomicBool>,
     /// D3D12 removes a device before wgpu hears of it (`Gpu::is_lost`).
     pub(super) removal: rune_gpu::health::Removal,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) uncaptured: Arc<dyn wgpu::UncapturedErrorHandler>,
 }
 
 /// Latched process-wide once a Linux direct-driver Vulkan instance fails to serve a device or
@@ -55,8 +57,8 @@ impl Gpu {
     }
 
     /// A device for a surface not made yet (`warm_gpu`): on the adapter a surface would get.
-    #[cfg(not(any(target_arch = "wasm32", target_os = "macos")))]
-    pub(super) fn try_for_display(instance: wgpu::Instance, wanted: wgpu::Features) -> Result<Gpu, String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn try_for_display(instance: wgpu::Instance, wanted: wgpu::Features) -> Result<Gpu, String> {
         Self::try_picked(instance, None, wanted, false, true)
     }
 

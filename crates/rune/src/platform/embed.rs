@@ -6,7 +6,7 @@
 use std::ffi::c_void;
 use std::sync::{Arc, OnceLock};
 
-use crate::compose::{Compositor, Frame};
+use crate::compose::{Compositor, FrameArgs};
 use crate::frame::clock::FrameClock;
 use crate::frame::host_step::{self, Acquire};
 use crate::platform::embed_frame::{self, EmbedSurface, EmbedSurfaceEvent, EmbedSurfaceHealth, FrameSummary};
@@ -20,7 +20,7 @@ static SHARED_GPU: OnceLock<Result<Arc<Gpu>, String>> = OnceLock::new();
 
 fn shared_gpu() -> Result<Arc<Gpu>, String> {
     SHARED_GPU
-        .get_or_init(|| Gpu::try_new(Gpu::instance(), None).map(Arc::new))
+        .get_or_init(|| Gpu::try_for_display(Gpu::instance(), wgpu::Features::empty()).map(Arc::new))
         .clone()
 }
 
@@ -277,19 +277,17 @@ impl<S: 'static> EmbedSurface for LayerHost<S> {
 
     fn render(&mut self, prepared: &mut PreparedEmbedFrame, dt: f64, update_ms: f64) -> bool {
         if let Some(comp) = &mut self.compositor {
-            let mut f = Frame {
-                device: &self.core.gpu.device,
-                queue: &self.core.gpu.queue,
+            let args = FrameArgs {
+                gpu: &self.core.gpu,
                 encoder: &mut prepared.encoder,
                 target: &prepared.target,
                 format: prepared.format,
                 size: prepared.size,
                 dt,
                 update_ms,
-                rt: &mut self.rt,
                 ui: &mut self.core.renderer,
             };
-            comp.render(&mut f);
+            comp.render(&mut args.with_runtime(&mut self.rt));
             comp.animating()
         } else {
             self.core.draw_default(self.rt.core_mut(), prepared);
