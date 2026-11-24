@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use rune::Env;
-use rune::compose::{Compositor, Frame};
+use rune::compose::{Compositor, FrameArgs};
 use rune::render::{Gpu, OFFSCREEN_FORMAT, Offscreen, Renderer};
 use rune::runtime::Runtime;
 
@@ -12,18 +12,16 @@ use super::Gfx;
 fn draw_on(gfx: &mut Gfx, rt: &mut Runtime<State>, gpu: &Gpu, ui_ren: &mut Renderer, off: &Offscreen, dt: f64) {
     rt.frame(dt);
     let mut encoder = gpu.device.create_command_encoder(&Default::default());
-    let mut frame = Frame {
-        device: &gpu.device,
-        queue: &gpu.queue,
+    let mut frame = FrameArgs {
+        gpu,
         encoder: &mut encoder,
         target: &off.view,
         format: OFFSCREEN_FORMAT,
         size: (off.width, off.height),
         dt,
         update_ms: 0.0,
-        rt,
         ui: ui_ren,
-    };
+    }.with_runtime(rt);
     gfx.render(&mut frame);
     ui_ren.submit(&gpu.queue, encoder);
     gpu.device.poll(wgpu::PollType::wait_indefinitely()).ok();

@@ -316,8 +316,7 @@ pub(super) fn render_window_frame(
     let target = l.alpha.as_ref().map_or(&prepared.view, |a| &a.view);
     let comp_animating = if host.app.has_compositor() {
         host.app.render_compositor(CompositorFrame {
-            device: &gpu.device,
-            queue: &gpu.queue,
+            gpu,
             encoder: &mut prepared.encoder,
             target,
             format: prepared.target_format,

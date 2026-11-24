@@ -1,0 +1,1 @@
+- Compositor frames expose their device's instance and adapter. Native compositors can restore Rune's device-loss and uncaptured-error handlers after an embedded renderer installs its own. Use `FrameArgs::with_runtime` to construct frames for custom hosts and offscreen rendering.

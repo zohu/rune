@@ -4,23 +4,12 @@
 use std::sync::Arc;
 
 use crate::app::Shared;
-use crate::compose::{Compositor, Frame};
+use crate::compose::Compositor;
 use crate::el::Tx;
-use crate::render::Renderer;
 use crate::runtime::{AppDriver, Runtime, RuntimeCore};
 use crate::tooling::{Kind, script_input};
 
-pub(super) struct HeadlessRenderArgs<'a> {
-    pub device: &'a wgpu::Device,
-    pub queue: &'a wgpu::Queue,
-    pub encoder: &'a mut wgpu::CommandEncoder,
-    pub target: &'a wgpu::TextureView,
-    pub format: wgpu::TextureFormat,
-    pub size: (u32, u32),
-    pub dt: f64,
-    pub update_ms: f64,
-    pub ui: &'a mut Renderer,
-}
+pub(super) use crate::compose::FrameArgs as HeadlessRenderArgs;
 
 pub(super) trait HeadlessApp {
     fn rt(&self) -> &RuntimeCore;
@@ -95,19 +84,7 @@ impl<S: 'static> HeadlessApp for TypedHeadlessApp<S> {
     }
     fn render_compositor(&mut self, args: HeadlessRenderArgs<'_>) -> bool {
         let Some(c) = self.comp.as_mut() else { return false };
-        let mut f = Frame {
-            device: args.device,
-            queue: args.queue,
-            encoder: args.encoder,
-            target: args.target,
-            format: args.format,
-            size: args.size,
-            dt: args.dt,
-            update_ms: args.update_ms,
-            rt: &mut self.rt,
-            ui: args.ui,
-        };
-        c.render(&mut f);
+        c.render(&mut args.with_runtime(&mut self.rt));
         c.animating()
     }
     fn compositor_summary(&mut self, device: &wgpu::Device) -> Option<String> {

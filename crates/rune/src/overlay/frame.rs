@@ -10,19 +10,7 @@ use crate::runtime::RuntimeCore;
 use crate::time::Instant;
 use crate::window::Presented;
 
-/// Non-generic arguments passed to [`OverlayApp::render_compositor`], which constructs
-/// [`crate::compose::Frame<'_, T>`] in place.
-pub(super) struct OverlayRenderArgs<'a> {
-    pub device: &'a wgpu::Device,
-    pub queue: &'a wgpu::Queue,
-    pub encoder: &'a mut wgpu::CommandEncoder,
-    pub target: &'a wgpu::TextureView,
-    pub format: wgpu::TextureFormat,
-    pub size: (u32, u32),
-    pub dt: f64,
-    pub update_ms: f64,
-    pub ui: &'a mut Renderer,
-}
+pub(super) use crate::compose::FrameArgs as OverlayRenderArgs;
 
 /// Whether nothing asks for the frame after one just presented. `next_tick` is the running
 /// display link's next tick, if one paces the overlay: a timer due by then counts as asking,
@@ -284,11 +272,12 @@ pub(super) fn claim(opportunity: Option<crate::platform::display_link::Opportuni
 
 /// Both native surface frames and offscreen prewarming use the same compositor path.
 pub(super) fn render_frame(app: &mut dyn OverlayApp, f: OverlayRenderArgs<'_>) -> bool {
+    let (device, queue) = (&f.gpu.device, &f.gpu.queue);
     {
         let rt = app.rt_mut();
-        f.ui.upload_images(f.device, f.queue, &mut rt.images);
-        f.ui.build_surfaces(f.device, &rt.surfaces, rt.live_notifier());
-        f.ui.prepare_surfaces(f.device, f.queue, &rt.surfaces, f.size);
+        f.ui.upload_images(device, queue, &mut rt.images);
+        f.ui.build_surfaces(device, &rt.surfaces, rt.live_notifier());
+        f.ui.prepare_surfaces(device, queue, &rt.surfaces, f.size);
         f.ui.set_frame_wake(rt.live_wake());
     }
     if app.has_compositor() {
@@ -296,7 +285,7 @@ pub(super) fn render_frame(app: &mut dyn OverlayApp, f: OverlayRenderArgs<'_>) -
     } else {
         let rt = app.rt_mut();
         f.ui.set_fade_stops(rt.fade_stops());
-        f.ui.prepare_ui(f.device, f.queue, &mut rt.text.atlas, &rt.instances, f.size);
+        f.ui.prepare_ui(device, queue, &mut rt.text.atlas, &rt.instances, f.size);
         f.ui.draw(f.encoder, f.target, [0.0; 4]);
         false
     }

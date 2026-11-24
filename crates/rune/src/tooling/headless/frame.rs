@@ -262,8 +262,7 @@ impl<F: FnMut(FrameShot, Vec<u8>)> FrameHost for HeadlessFrame<'_, '_, F> {
         let view = s.alpha.as_ref().map_or(&s.target.view, |a| &a.view);
         let comp_animating = if s.has_comp {
             self.app.render_compositor(HeadlessRenderArgs {
-                device: &s.gpu.device,
-                queue: &s.gpu.queue,
+                gpu: s.gpu,
                 encoder: &mut prepared.encoder,
                 target: view,
                 format: s.target_format,

@@ -1,6 +1,6 @@
 //! GPU instance, adapter and device creation, prewarming, and allocation reporting.
 
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{Arc, OnceLock, atomic::{AtomicBool, Ordering}};
 
 #[cfg(all(test, target_os = "macos"))]
 use super::{Renderer, gpu_events};
@@ -17,8 +17,8 @@ pub struct Gpu {
     pub(super) lost: Arc<AtomicBool>,
     /// D3D12 removes a device before wgpu hears of it (`Gpu::is_lost`).
     pub(super) removal: rune_gpu::health::Removal,
-    /// Whether Rune's surface uncaptured-error policy has been installed on this device.
-    pub(super) uncaptured_logged: AtomicBool,
+    /// The handler installed for surfaces, or `None` if this build keeps wgpu's default.
+    pub(super) surface_error_handler: OnceLock<Option<Arc<dyn wgpu::UncapturedErrorHandler>>>,
 }
 
 /// Latched process-wide once a Linux direct-driver Vulkan instance fails to serve a device or
