@@ -1,0 +1,1 @@
+- Components can handle presses, drawn layout, wheels, and magnification without naming the host state type. `Family::named_bounded` accepts runtime family names.

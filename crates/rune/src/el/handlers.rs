@@ -19,6 +19,20 @@ impl El {
         }
         self
     }
+    /// [`El::on_press_tx`] for a component that doesn't read the app's state, so it works in any app.
+    #[inline]
+    pub fn on_press_tx_any(mut self, f: impl Fn(&mut Tx) + 'static) -> Self {
+        self.set_on_press_tx_any(f);
+        self
+    }
+    /// [`El::on_press_tx_any`] in place.
+    pub fn set_on_press_tx_any(&mut self, f: impl Fn(&mut Tx) + 'static) -> &mut Self {
+        self.handlers.on_press = Some(Rc::new(move |_, tx| f(tx)));
+        if self.role == RoleTag::GROUP {
+            self.role = RoleTag::BUTTON;
+        }
+        self
+    }
     /// A press on a surface that isn't a control: a pane that clears a selection or takes
     /// keyboard routing when clicked, a scrim that closes what it covers. It runs as
     /// [`El::on_press`] does under the pointer, but the element stays what its role says (it
@@ -30,6 +44,11 @@ impl El {
     /// [`El::on_background_press`] with the transaction.
     pub fn on_background_press_tx<S: 'static>(mut self, f: impl Fn(&mut S, &mut Tx) + 'static) -> Self {
         self.handlers.on_press = Some(Rc::new(move |s, tx| f(downcast::<S>(s), tx)));
+        self.focusable(false)
+    }
+    /// [`El::on_background_press_tx`] for a component that doesn't read the app's state, so it works in any app.
+    pub fn on_background_press_tx_any(mut self, f: impl Fn(&mut Tx) + 'static) -> Self {
+        self.handlers.on_press = Some(Rc::new(move |_, tx| f(tx)));
         self.focusable(false)
     }
     /// Runs on the second of two presses on this element, as a double-click does: the second
