@@ -175,7 +175,7 @@ pub use selection::selectable::{SelectedText, SelectionChange, TextSelection};
 pub use selection::text_marks::TextMark;
 use selection::{caret, click as input_click, links, select_all, text_marks};
 
-use virtual_list::{fill as virtual_fill, row_reorder};
+use virtual_list::{fill as virtual_fill, items, row_reorder};
 
 pub(crate) use web::{a11y as web_a11y, export as web_export, page as web_page};
 #[cfg(any(test, target_arch = "wasm32"))]

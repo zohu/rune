@@ -228,6 +228,7 @@ impl RuntimeCore {
         let mut live_woke = self.take_live_wake();
         // Another window may have switched the font families since this one's last frame.
         self.follow_font_families();
+        self.commit.items.frame_begins();
         for v in self.commit.virtuals.values_mut() { v.frame_begins(); }
         #[cfg(feature = "hot")]
         if self.frame.hot_changed() {

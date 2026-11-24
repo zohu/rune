@@ -55,6 +55,8 @@ pub(crate) struct CommitState {
     pub(in crate::runtime) watch: crate::tooling::perf_warn::Watch,
     /// Opt-in tooling checks. None keeps release commits free of key traversal/allocation.
     key_warnings: Option<Vec<String>>,
+    /// Application-selected windows by container path.
+    pub(in crate::runtime) items: items::Windows,
     pub(crate) virtuals: HashMap<String, crate::el::virtual_list::VirtualList>,
     virtual_culled: HashSet<String>,
     /// Fresh view accessors for focused text fields omitted by virtualization.
@@ -100,6 +102,7 @@ impl CommitState {
             watch: Default::default(),
             key_warnings: None,
             defaults: Default::default(),
+            items: items::Windows::default(),
             virtuals: HashMap::default(),
             virtual_culled: HashSet::default(),
             virtual_inputs: HashMap::default(),
@@ -386,6 +389,7 @@ pub(super) struct Measurement<'a> {
     pub(super) memo: &'a mut crate::memo::MemoCache,
     pub(super) next_id: &'a mut u64,
     pub(super) scrolls: &'a mut HashMap<NodeId, ScrollState>,
+    pub(super) items: &'a mut items::Windows,
     pub(super) virtuals: &'a mut HashMap<String, crate::el::virtual_list::VirtualList>,
     pub(super) virtual_culled: &'a mut HashSet<String>,
     pub(super) virtual_inputs: &'a mut HashMap<String, Box<InputSpec>>,

@@ -1,5 +1,5 @@
 //! Remounting [`El::virtual_rows`](crate::El::virtual_rows) windows when a commit only shifted a
-//! virtual scroll window or filled overscan (`CommitWhy::VIRTUAL`).
+//! virtual scroll window, filled overscan or changed an application-selected item window.
 //!
 //! With app state, scale, blend mode and layout reads unchanged, non-list nodes and rows already
 //! mounted stay as they were: they move directly out of `self.nodes` into the new pass's node
@@ -11,10 +11,17 @@ use std::rc::Rc;
 
 use super::*;
 
+mod items_plan;
+
 pub(in crate::runtime) enum RemountOutcome {
     Measured(Measured),
     Retry,
     Fallback,
+}
+
+enum Source {
+    Rows(Rc<crate::el::virtual_rows::RowSource>),
+    Items { source: Rc<dyn crate::VirtualItems>, keys: Vec<String> },
 }
 
 struct ListPlan {
@@ -27,25 +34,50 @@ struct ListPlan {
     mounted_rows: HashMap<String, (usize, usize)>,
     focused: Option<usize>,
     pinned: Vec<usize>,
-    rows: Rc<crate::el::virtual_rows::RowSource>,
+    source: Source,
     list_group: Option<String>,
     inert: bool,
     quiet: Vec<bool>,
     built_rows: Vec<(usize, El)>,
 }
 
+impl Source {
+    fn keys<'a>(&'a self, path: &str, lists: &'a HashMap<String, crate::el::virtual_list::VirtualList>) -> &'a [String] {
+        match self {
+            Self::Rows(_) => &lists[path].keys,
+            Self::Items { keys, .. } => keys,
+        }
+    }
+}
+
 impl CommitState {
     /// Whether a commit that resized nothing and changed nothing the view reads
-    /// ([`Runtime::commit_kind`]) only shifts or fills `virtual_rows` windows, so `view` and
+    /// ([`RuntimeCore::commit_kind`]) only shifts or fills virtual windows, so `view` and
     /// already mounted subtrees need not rebuild.
     pub(in crate::runtime) fn virtual_only(&self, tree: &types::TreeState, hot: bool, checking_live_only: bool) -> bool {
-        if hot || checking_live_only || self.virtuals.is_empty() || tree.nodes.is_empty() {
+        // Hot callbacks can run after the jump table changes, so pending alone cannot guard reuse.
+        if hot || checking_live_only || (self.virtuals.is_empty() && self.items.lists.is_empty()) || tree.nodes.is_empty() {
             return false;
         }
         if !tree.nodes.iter().all(|n| {
             relayout::reusable(n) && n.text.as_ref().is_none_or(|t| !t.redacted)
         }) {
             return false;
+        }
+        let mut paths = self.virtuals.keys().chain(self.items.lists.keys());
+        if paths.any(|path| path.match_indices('/').any(|(i, _)| {
+            let ancestor = &path[..i];
+            self.virtuals.contains_key(ancestor) || self.items.lists.contains_key(ancestor)
+        })) {
+            return false;
+        }
+        for path in self.items.lists.keys() {
+            if self.virtuals.contains_key(path)
+                || !tree.path_ids.get(path).and_then(|id| tree.node_index.get(id))
+                .and_then(|&i| tree.nodes.get(i)).is_some_and(|n| n.path == *path)
+            {
+                return false;
+            }
         }
         for (path, v) in &self.virtuals {
             if !v.indexed || !v.selection.pins.source().and_then(|s| s.rebuild()).is_some_and(|s| s.count == v.keys.len()) {
@@ -67,14 +99,25 @@ impl CommitState {
             }) {
                 return false;
             }
-            if self.virtuals.keys().any(|other| {
-                other != path && other.strip_prefix(path.as_str()).is_some_and(|r| r.starts_with('/'))
-            }) {
-                return false;
-            }
         }
         true
     }
+}
+
+fn mounted_children(nodes: &[Node], parent: usize) -> (usize, HashMap<String, (usize, usize)>) {
+    let mut children = HashMap::default();
+    let mut cur = parent + 1;
+    while cur < nodes.len() && nodes[cur].parent == Some(parent) {
+        let mut end = cur + 1;
+        while end < nodes.len() && nodes[end].parent.is_some_and(|p| p >= cur) {
+            end += 1;
+        }
+        if let Some(key) = &nodes[cur].key {
+            children.insert(key.clone(), (cur, end));
+        }
+        cur = end;
+    }
+    (cur, children)
 }
 
 fn move_slice(
@@ -147,34 +190,14 @@ impl Measurement<'_> {
         self.virtual_culled.clear();
         self.virtual_inputs.clear();
 
-        let mut plans = Vec::with_capacity(self.virtuals.len());
+        let mut plans = Vec::with_capacity(self.virtuals.len() + self.items.lists.len());
         for (path, v) in self.virtuals.iter_mut() {
             let list_id = self.path_ids[path];
             let old_list_idx = self.node_index[&list_id];
             let scroll_id = self.path_ids[&v.scroll_path];
             let scroll_idx = self.node_index[&scroll_id];
 
-            let mut list_subtree_end = old_list_idx + 1;
-            while list_subtree_end < self.nodes.len()
-                && self.nodes[list_subtree_end].parent.is_some_and(|p| p >= old_list_idx)
-            {
-                list_subtree_end += 1;
-            }
-            let mut mounted_rows = HashMap::default();
-            let mut cur = old_list_idx + 1;
-            while cur < list_subtree_end {
-                debug_assert_eq!(self.nodes[cur].parent, Some(old_list_idx));
-                let mut row_end = cur + 1;
-                while row_end < list_subtree_end
-                    && self.nodes[row_end].parent.is_some_and(|p| p >= cur)
-                {
-                    row_end += 1;
-                }
-                if let Some(k) = &self.nodes[cur].key {
-                    mounted_rows.insert(k.clone(), (cur, row_end));
-                }
-                cur = row_end;
-            }
+            let (list_subtree_end, mounted_rows) = mounted_children(self.nodes, old_list_idx);
 
             let sticky = self.nodes[scroll_idx].scroll.unwrap().stick_bottom;
             let old_scroll = self.scrolls.get(&scroll_id);
@@ -228,18 +251,19 @@ impl Measurement<'_> {
                 mounted_rows,
                 focused,
                 pinned: pinned_rows,
-                rows,
+                source: Source::Rows(rows),
                 list_group,
                 inert,
                 quiet: Vec::new(),
                 built_rows: Vec::new(),
             });
         }
+        self.plan_items(&mut plans);
         plans.sort_unstable_by_key(|p| p.old_list_idx);
 
         let mut kept_rows = HashSet::default();
         for plan in &plans {
-            let keys = &self.virtuals[&plan.path].keys;
+            let keys = plan.source.keys(&plan.path, self.virtuals);
             for row_i in plan.range.clone() {
                 let key = &keys[row_i];
                 if plan.mounted_rows.contains_key(key) {
@@ -263,9 +287,25 @@ impl Measurement<'_> {
         let state = self.app.states_ref();
         let mut nested_virtual = false;
         for plan in &mut plans {
+            let rows = match &plan.source {
+                Source::Items { source, keys } => {
+                    for (pos, key) in keys.iter().enumerate() {
+                        if plan.mounted_rows.contains_key(key) { continue; }
+                        let item = items::build_item(&**source, &plan.path, key, self.key_warnings);
+                        if item.flags.has(crate::el::ElFlags::HAS_VIRTUAL) {
+                            nested_virtual = true;
+                            break;
+                        }
+                        plan.built_rows.push((pos, item));
+                    }
+                    if nested_virtual { break; }
+                    continue;
+                }
+                Source::Rows(rows) => rows,
+            };
             let v = self.virtuals.get_mut(&plan.path).unwrap();
             if let Some(i) = plan.focused {
-                let row = build_indexed_row(&plan.rows, state, &plan.path, &v.keys[i], i, self.key_warnings);
+                let row = build_indexed_row(rows, state, &plan.path, &v.keys[i], i, self.key_warnings);
                 measure::collect_virtual_inputs(&row, &plan.path, i, plan.inert, self.virtual_inputs);
                 if plan.pinned.contains(&i) {
                     selectable::virtual_selection::collect_row_into_pins(
@@ -283,7 +323,7 @@ impl Measurement<'_> {
                 if Some(i) == plan.focused {
                     continue;
                 }
-                let row = build_indexed_row(&plan.rows, state, &plan.path, &v.keys[i], i, self.key_warnings);
+                let row = build_indexed_row(rows, state, &plan.path, &v.keys[i], i, self.key_warnings);
                 selectable::virtual_selection::collect_row_into_pins(
                     &mut v.selection.pins,
                     &row,
@@ -298,8 +338,8 @@ impl Measurement<'_> {
                 let key = &v.keys[row_i];
                 if !plan.mounted_rows.contains_key(key) {
                     #[cfg(debug_assertions)]
-                    v.check_append_row_key(&plan.path, row_i, self.commits, |i| (plan.rows.key)(state, i));
-                    let row = build_indexed_row(&plan.rows, state, &plan.path, key, row_i, self.key_warnings);
+                    v.check_append_row_key(&plan.path, row_i, self.commits, |i| (rows.key)(state, i));
+                    let row = build_indexed_row(rows, state, &plan.path, key, row_i, self.key_warnings);
                     if row.flags.has(crate::el::ElFlags::HAS_VIRTUAL) {
                         nested_virtual = true;
                         break;
@@ -323,8 +363,13 @@ impl Measurement<'_> {
         }
 
         for plan in &mut plans {
-            let v = self.virtuals.get_mut(&plan.path).unwrap();
-            plan.quiet = plan.range.clone().map(|i| v.mounts_quietly(i, self.commits)).collect();
+            plan.quiet = match &plan.source {
+                Source::Rows(_) => {
+                    let v = self.virtuals.get_mut(&plan.path).unwrap();
+                    plan.range.clone().map(|i| v.mounts_quietly(i, self.commits)).collect()
+                }
+                Source::Items { keys, .. } => vec![true; keys.len()],
+            };
             for (pos, row) in &mut plan.built_rows {
                 row.flags.set(crate::el::ElFlags::VIRTUAL_MOUNT, plan.quiet[*pos]);
             }
@@ -393,8 +438,10 @@ impl Measurement<'_> {
                 });
 
                 let mut list_style = taffy.style(list_taffy).clone();
-                list_style.set_pad_top(plan.pad_top);
-                list_style.set_pad_bottom(plan.pad_bottom);
+                if matches!(&plan.source, Source::Rows(_)) {
+                    list_style.set_pad_top(plan.pad_top);
+                    list_style.set_pad_bottom(plan.pad_bottom);
+                }
                 let parent_row = matches!(
                     list_style.flex_direction(),
                     FlexDirection::Row | FlexDirection::RowReverse
@@ -403,7 +450,7 @@ impl Measurement<'_> {
                 let mut row_slots = Vec::with_capacity(plan.range.len());
                 let mut any_row_dirty = false;
                 let mut built_iter = plan.built_rows.into_iter().peekable();
-                let keys = &self.virtuals[&plan.path].keys;
+                let keys = plan.source.keys(&plan.path, self.virtuals);
                 for (pos, row_i) in plan.range.clone().enumerate() {
                     if built_iter.peek().is_some_and(|(p, _)| *p == pos) {
                         let (_, row_el) = built_iter.next().unwrap();

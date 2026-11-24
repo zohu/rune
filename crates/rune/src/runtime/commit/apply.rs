@@ -586,6 +586,7 @@ impl RuntimeCore {
         if self.tree.nodes.len() > present_len || !self.motion.flying.is_empty() || landed || self.tree.has_sticky || self.tree.has_raise || self.tree.has_paint_order || self.tree.has_above { self.update_layer_paint_order(); }
         else { self.paint.clear_layer_paint_order(); }
         self.tree.built = false;
+        self.applied_items(present_len);
         self.subscribe_live();
         if let Some(path) = rebound_press { self.pointer.rebind_press_path(&path); }
         self.sync_modals(app);

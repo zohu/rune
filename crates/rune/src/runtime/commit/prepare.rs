@@ -60,6 +60,7 @@ impl RuntimeCore {
         let (mut node_index, mut path_ids, mut memo) = (NodeIndex::default(), HashMap::default(), crate::memo::MemoCache::default());
         let (mut next_id, mut scrolls, mut virtuals) = (0u64, HashMap::default(), HashMap::default());
         let (mut virtual_culled, mut virtual_inputs, mut stats, mut key_warnings) = (HashSet::default(), HashMap::default(), FrameStats::default(), None);
+        let mut items = items::Windows::default();
         let m = Measurement {
             app,
             env: self.env,
@@ -94,6 +95,7 @@ impl RuntimeCore {
             memo: &mut memo,
             next_id: &mut next_id,
             scrolls: &mut scrolls,
+            items: &mut items,
             virtuals: &mut virtuals,
             virtual_culled: &mut virtual_culled,
             virtual_inputs: &mut virtual_inputs,

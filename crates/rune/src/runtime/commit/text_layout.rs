@@ -362,7 +362,9 @@ pub(in crate::runtime) fn compute_layout(taffy: &mut LayoutEngine, root: SlotId,
     taffy.compute_layout(root, room, |inputs, ctx, style| {
         rune_taffy::compute_leaf_layout(inputs, style, |known, avail| {
             let Some(i) = ctx else { return Size::ZERO };
-            let Some(spec) = nodes[i].text.as_ref() else {
+            // LiveText updates glyphs in the authored box, including after a remount.
+            let authored = nodes[i].cold.get().and_then(|c| c.live_text_measure.as_ref());
+            let Some(spec) = authored.or(nodes[i].text.as_ref()) else {
                 return picture_size(known, avail, nodes[i].cold.get().and_then(|c| c.pixel_aspect).unwrap_or(0.0));
             };
             // `known` is the border box; `avail` is already the content box (known or styled
