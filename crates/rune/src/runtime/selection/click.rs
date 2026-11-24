@@ -294,6 +294,7 @@ impl RuntimeCore {
             self.edit.drop_input_drag();
             return false;
         };
+        self.edit.caret_breath.reset();
         let single = self.tree.nodes[i].input.as_ref().is_some_and(|inp| inp.single_line);
         let layout = self.tree.nodes[i].text_layout.clone();
         let point = self.input_text_point(i, x, y);

@@ -61,6 +61,8 @@ impl RuntimeCore {
         // Every focus gain, even one a hide without blur left unreported.
         if focused { self.kbd.keys_lost = false; }
         if self.host.window_focused != Some(focused) {
+            self.edit.caret_breath.reset();
+            if self.focused_input().is_some_and(|i| i.caret_breathe.is_some()) { self.commit.dirty = true; }
             // Refocused, the pointer where it was hovers again; blurred, it waits for a move.
             if focused && self.host.window_focused == Some(false) { self.pointer.hover_paused = false; }
             // A selection takes its active or inactive pair (`El::selection_style`): a focused
