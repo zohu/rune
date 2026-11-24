@@ -23,6 +23,8 @@ pub(crate) struct NodeCold {
     /// The run a cell measures and draws from (see `El::advance_in`).
     pub(super) run_layout: Option<Rc<crate::text::RunLayout>>,
     pub(super) live_text_seen: Option<u128>,
+    /// The authored sizing placeholder, saved when LiveText first changes the shown text.
+    pub(super) live_text_measure: Option<crate::cold::SharedBox<TextSpec>>,
     pub(super) looping: Option<Box<rune_motion::LoopSpec>>,
     pub(super) loop_times: Option<u32>,
     pub(super) frame_motion: Option<Box<rune_motion::Anim>>,
@@ -73,6 +75,7 @@ impl crate::cold::Empty for NodeCold {
         live: Vec::new(),
         run_layout: None,
         live_text_seen: None,
+        live_text_measure: None,
         looping: None,
         loop_times: None,
         frame_motion: None,

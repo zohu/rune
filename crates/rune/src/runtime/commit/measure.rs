@@ -1,6 +1,9 @@
 use super::*;
 use crate::el::ElFlags;
 
+mod windows;
+use windows::{OwnedScrollCtx, ScrollCtx, windowed_lists};
+
 pub(in crate::runtime) fn collect_virtual_inputs(el: &El, parent: &str, index: usize, inert: bool, inputs: &mut HashMap<String, Box<InputSpec>>) {
     // Most offscreen rows hold no focused field; find that out before building any paths.
     if !crate::memo::has_focused_input(el) {
@@ -88,6 +91,7 @@ impl RuntimeCore {
             next_id: &mut self.tree.next_id,
             scrolls: &mut self.scroll.scrolls,
             scroll_requests: &self.scroll.requests,
+            items: &mut self.commit.items,
             virtuals: &mut self.commit.virtuals,
             virtual_culled: &mut self.commit.virtual_culled,
             virtual_inputs: &mut self.commit.virtual_inputs,
@@ -172,6 +176,7 @@ impl Measurement<'_> {
         // Index-built rows build here, so memos inside them share the view's cache. A window that
         // fits its content lays its root out at its natural height, which nothing bounds.
         let bound = if self.fit_height { f32::INFINITY } else { self.viewport.1 };
+        self.items.begin_measure();
         self.window_tree(&mut root, "", 0, None, tx, force_all, bound, false, None, false, keep_windows);
         root
     }
@@ -271,6 +276,7 @@ impl Measurement<'_> {
         let inert = inert || el.flags.has(ElFlags::INERT);
         let bound = crate::el::virtual_list::height_bound(&el.style, bound);
         let is_virtual = el.cold.virtual_estimate.is_some();
+        self.populate_items(el, &path);
         if let Some(estimate) = el.cold.virtual_estimate {
             let w = match self.windowed.remove(&path) {
                 Some(w) => w,
@@ -777,62 +783,6 @@ impl RuntimeCore {
             }
         }
     }
-}
-
-/// The `virtual_rows` lists in memo placeholder `el`'s shared subtree at `path`, with the scroll
-/// viewport each windows against, as `window_tree` would find them. False when one can't be
-/// windowed without expanding: a list built from children, or a memo given extra children.
-#[derive(Clone, Copy)]
-struct ScrollCtx<'a> {
-    path: &'a str,
-    sticky: bool,
-    bound: f32,
-    nested: bool,
-    no_anchor: bool,
-}
-
-struct OwnedScrollCtx {
-    path: String,
-    sticky: bool,
-    bound: f32,
-    nested: bool,
-    no_anchor: bool,
-}
-
-impl OwnedScrollCtx {
-    fn from_ctx(c: ScrollCtx<'_>) -> Self {
-        Self { path: c.path.to_owned(), sticky: c.sticky, bound: c.bound, nested: c.nested, no_anchor: c.no_anchor }
-    }
-    fn as_ref(&self) -> ScrollCtx<'_> {
-        ScrollCtx { path: self.path.as_str(), sticky: self.sticky, bound: self.bound, nested: self.nested, no_anchor: self.no_anchor }
-    }
-}
-
-fn windowed_lists<'e>(el: &'e El, path: &str, scroll: Option<ScrollCtx<'_>>, bound: f32, out: &mut Vec<(String, &'e El, Option<OwnedScrollCtx>)>) -> bool {
-    if !el.flags.has(ElFlags::HAS_VIRTUAL) {
-        return true;
-    }
-    let kids: &[El] = match el.memo_children() {
-        Some(m) if el.children.is_empty() && !el.flags.has(ElFlags::MEMO_EXTENDED) => &m.children,
-        Some(_) => return false,
-        None => &el.children,
-    };
-    let bound = crate::el::virtual_list::height_bound(&el.style, bound);
-    let is_virtual = el.cold.virtual_estimate.is_some();
-    if is_virtual {
-        if el.cold.virtual_rows.is_none() {
-            return false;
-        }
-        out.push((path.to_owned(), el, scroll.map(OwnedScrollCtx::from_ctx)));
-    }
-    let bounds = crate::el::virtual_list::child_bounds(&el.style, el.cold.scroll.is_some(), bound, kids);
-    let scroll = match el.cold.scroll {
-        Some(s) => Some(ScrollCtx { path, sticky: s.stick_bottom, bound, nested: false, no_anchor: el.cold.scroll_edges.no_anchor }),
-        None => scroll.map(|sc| ScrollCtx { nested: sc.nested || is_virtual, ..sc }),
-    };
-    kids.iter().enumerate().filter(|(_, c)| c.flags.has(ElFlags::HAS_VIRTUAL)).all(|(i, child)| {
-        windowed_lists(child, &node_path(path, child.key.as_deref(), i), scroll, bounds.of(child), out)
-    })
 }
 
 /// A virtual list's window, picked before its element is expanded (`Measurement::window`).

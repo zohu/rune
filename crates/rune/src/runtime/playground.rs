@@ -37,11 +37,14 @@ impl RuntimeCore {
             let Some(playground) = app.playground() else { return };
             (playground.has_pending(), playground.pending_swaps_stage(), playground.pending_replays_only(), playground.is_open())
         };
+        if self.commit.dirty { self.commit.set_state_unchanged(false); }
         if !has_pending { return; }
         let keep = replays_only && self.focused_index().is_some_and(|i| self.tree.under(i, |k| k == "playground-side"));
         if swaps && !keep && self.kbd.focus.path().is_some() { self.set_focus(app, None, false); }
         let clock = self.clock;
         if !app.playground_apply(clock) { return; }
+        // A request can replace the stage even when no app handler ran.
+        self.commit.set_state_unchanged(false);
         self.commit.clear_memo();
         if swaps { self.leave_stage(app, was_open); }
         // A new stage state gets its first poll on the next frame, as an app's does.

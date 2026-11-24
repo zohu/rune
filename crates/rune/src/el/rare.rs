@@ -50,6 +50,8 @@ pub(crate) struct ElCold {
     pub(crate) scroll_edges: ScrollEdges,
     pub(crate) growth: Option<Box<GrowthSpec>>,
     pub(crate) virtual_estimate: Option<f32>,
+    /// The application-selected window, built at layout time.
+    pub(crate) virtual_items: Option<Rc<dyn crate::VirtualItems>>,
     /// Rows `El::virtual_rows` builds at layout time, in place of `children`.
     pub(crate) virtual_rows: Option<Rc<crate::el::virtual_rows::RowSource>>,
     /// [`El::virtual_rows_version`](crate::El::virtual_rows_version), hashed.
@@ -115,6 +117,7 @@ impl Empty for ElCold {
         scroll_edges: ScrollEdges { fade: 0.0, fade_style: crate::el::FadeStyle::SMOOTH, margin: 0.0, anchor: false, no_anchor: false },
         growth: None,
         virtual_estimate: None,
+        virtual_items: None,
         virtual_rows: None,
         virtual_rows_version: None,
         virtual_rows_append_only: false,
@@ -144,7 +147,7 @@ impl Empty for ElCold {
 pub(crate) struct ElFlags(u16);
 
 impl ElFlags {
-    /// This element or anything under it uses `virtualize` or `virtual_rows`.
+    /// This element or anything under it uses `virtualize`, `virtual_rows` or `virtual_items`.
     pub(crate) const HAS_VIRTUAL: u16 = 1;
     pub(crate) const WIDTH_LEADS: u16 = 1 << 1;
     pub(crate) const ANIMATE_LAYOUT: u16 = 1 << 2;

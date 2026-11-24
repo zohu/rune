@@ -272,6 +272,7 @@ impl timer_wake::FrameState {
             {
                 let seen = &mut node.cold.live_text_seen;
                 if let Some(live_text) = live.read(seen) && spec.source_text() != &*live_text {
+                    node.cold.live_text_measure.get_or_insert_with(|| spec.clone());
                     spec.replace_content(live_text.to_string());
                     spec.apply_case();
                     if !spec.wrap && !spec.truncate && spec.max_lines == 0 {

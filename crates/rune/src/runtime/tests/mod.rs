@@ -31,6 +31,7 @@ mod pointer_hit;
 mod press_moving;
 mod relayout;
 mod remount;
+mod remount_hosts;
 mod reveal_chain;
 mod reveal_phase;
 mod scroll_carried;
@@ -56,6 +57,7 @@ mod text_quads;
 mod text_rebreak;
 mod titlebar_press;
 mod unseen_entrances;
+mod virtual_items;
 mod window_wake;
 
 thread_local! {
