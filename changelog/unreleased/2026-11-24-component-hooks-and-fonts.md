@@ -1,0 +1,1 @@
+- Reusable components can observe layout, visibility and input without naming the host state type. `Family::named_bounded` accepts runtime family names. On Apple platforms, system slot fonts supply common punctuation without a fallback lookup and the colour emoji face loads on demand.

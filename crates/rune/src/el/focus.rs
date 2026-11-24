@@ -109,6 +109,11 @@ impl El {
         self.cold_mut().focus.key = Some(Rc::new(move |s, key, tx| f(downcast::<S>(s), key, tx)));
         self
     }
+    /// [`El::on_key`] for a component that doesn't read the app's state, so it works in any app.
+    pub fn on_key_any(mut self, f: impl Fn(&crate::KeyEvent, &mut Tx) -> bool + 'static) -> Self {
+        self.cold_mut().focus.key = Some(Rc::new(move |_, key, tx| f(key, tx)));
+        self
+    }
     /// Opt into keyboard and pointer focus. Disabled controls must set this false, which also
     /// keeps a pressable control out of the Tab order under [`Cx::web_focus`](crate::Cx::web_focus).
     pub fn focusable(mut self, enabled: bool) -> Self {

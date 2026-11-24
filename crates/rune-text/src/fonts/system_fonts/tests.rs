@@ -101,3 +101,44 @@ fn apply_families_missing_family_falls_back_to_bundled_fonts_without_system_font
     assert_eq!(sw_one, fw_one, "switched single-missing-slot must match fresh launch width");
     assert_eq!(sq_one, fq_one, "switched single-missing-slot must draw the same glyphs");
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn apple_slot_punctuation_skips_system_fallback_and_emoji_loads_on_demand() {
+    if core_text::family_files(&["System Font"]).is_empty() || core_text::family_files(&[APPLE_EMOJI_FAMILY]).is_empty() {
+        return;
+    }
+    // Empty starts without app or embedded fonts, even in a unit test build.
+    let mut text = TextSystem::empty();
+    text.apply_families("system-ui", "ui-monospace");
+    assert!(text.font_cx.collection.family_id(APPLE_EMOJI_FAMILY).is_none());
+
+    let style = TextStyle::new(13.0, 400.0);
+    let layout = text.layout_rich("Item · next… threshold ≥ 95%", &[], style, 2.0, None);
+    let mut glyph_count = 0;
+    for item in layout.lines().flat_map(|line| line.items()) {
+        if let PositionedLayoutItem::GlyphRun(run) = item {
+            for glyph in run.glyphs() {
+                assert_ne!(glyph.id, 0, "punctuation must have a real glyph");
+                glyph_count += 1;
+            }
+        }
+    }
+    assert!(glyph_count > 0);
+    assert!(!text.fallbacks.symbols);
+    assert!(text.math.is_none());
+    assert!(text.fallbacks.asked.is_empty());
+    assert!(text.font_cx.collection.family_id(APPLE_EMOJI_FAMILY).is_none());
+
+    let layout = text.layout_rich("Launch 🚀", &[], style, 2.0, None);
+    let mut quads = Vec::new();
+    text.glyphs_for_layout(&layout, 2.0, [0.0, 0.0], false, &mut quads);
+    assert_eq!(text.emoji, Some(APPLE_EMOJI_FAMILY));
+    assert_eq!(text.symbol_families.last(), Some(&APPLE_EMOJI_FAMILY));
+    assert_eq!(quads.iter().filter(|quad| quad.color != 0).count(), 1);
+
+    let mut text = TextSystem::empty();
+    text.apply_families("system-ui", "ui-monospace");
+    text.layout_rich("Launch 🚀\u{FE0E}", &[], style, 2.0, None);
+    assert!(text.font_cx.collection.family_id(APPLE_EMOJI_FAMILY).is_none());
+}

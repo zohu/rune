@@ -1,14 +1,16 @@
 //! The system's fonts: monospace and symbol families, CJK and script fallbacks, and the font
 //! directories they're found in.
 //!
-//! None is touched at launch: a system font loads the first time a text has a character the
-//! app's own fonts lack (`TextSystem::load_fallbacks`). The platform's own fallback names the
+//! Missing primary slots load their system fallbacks at setup. Other system fonts load the
+//! first time a text has a character the app's fonts lack. The platform's own fallback names the
 //! font and its files, as browsers ask it: DirectWrite on Windows (`direct_write`), CoreText on
 //! Apple platforms (`core_text`), fontconfig in process elsewhere (`fontconfig`). No font
 //! folder is walked and no process is started.
 
 use crate::*;
 
+#[cfg(target_vendor = "apple")]
+mod apple_fallbacks;
 #[cfg(target_vendor = "apple")]
 mod core_text;
 #[cfg(windows)]
@@ -33,12 +35,11 @@ mod platform {
 // On macOS the system font comes first: its keyboard symbols (⌘⇧⏎⌫⎋⌥⌃) sit on the baseline at
 // cap height and follow the requested weight through its `wght` axis. Apple Symbols draws
 // them light, small and (⇧) below the baseline next to app fonts' capitals.
-// The colour emoji family comes last, so symbols with a text form keep it.
+// Apple Color Emoji loads separately when a grapheme requests emoji presentation.
 #[cfg(target_vendor = "apple")]
-pub(crate) const SYMBOL_FAMILIES: &[&str] = &["System Font", ".SF NS", "Apple Symbols", ".SF NS Symbols", "Menlo", "Apple Color Emoji"];
+pub(crate) const SYMBOL_FAMILIES: &[&str] = &["System Font", ".SF NS", "Apple Symbols", ".SF NS Symbols", "Menlo"];
 #[cfg(target_vendor = "apple")]
-// SF italic rides along so `Family::Named("System Font").italic()` gets the real face.
-pub(crate) const SYMBOL_FONT_FILES: &[&str] = &["sfnsttf", "sfnsitalic", "applesymbols", "sfnssymbols", "menlo", "applecoloremoji"];
+const APPLE_EMOJI_FAMILY: &str = "Apple Color Emoji";
 // Windows loads its symbol fonts as its own fallback names them (`direct_write::fallback_files`),
 // and this colour emoji family for a `U+FE0F` sequence.
 #[cfg(windows)]
@@ -203,6 +204,9 @@ pub(crate) struct Fallbacks {
     own: Vec<&'static [u8]>,
     /// The families registered from `own`, deduplicated in registration order.
     own_families: Vec<FamilyId>,
+    /// Character maps of the lightweight Apple slot fallback faces, once loaded.
+    #[cfg(target_vendor = "apple")]
+    apple_slots: Option<Vec<apple_fallbacks::SlotCharmap>>,
     /// Characters already looked up (Windows: each asked of DirectWrite once).
     asked: std::collections::HashSet<char>,
     /// The locales the system's CJK fonts were looked up for (Windows), or whether they were
@@ -266,14 +270,21 @@ impl TextSystem {
     /// a script's fallback (`fallback::SCRIPT_FONTS`), CJK fonts, math fonts, the colour emoji
     /// family, and (Windows) the font Windows falls back to for any other character; elsewhere
     /// the symbol families. Latin text the app's fonts cover loads nothing.
-    pub(crate) fn load_fallbacks(&mut self, text: &str, language: Option<parley::fontique::Language>) {
+    pub(crate) fn load_fallbacks(&mut self, text: &str, language: Option<parley::fontique::Language>, emoji_requested: bool) {
         if text.is_ascii() {
             return;
         }
         let locale = language.as_ref().map(|l| l.to_string());
         let own: Vec<skrifa::charmap::Charmap<'static>> = self.fallbacks.own.iter().filter_map(|data| skrifa::FontRef::from_index(data, 0).ok()).map(|f| skrifa::MetadataProvider::charmap(&f)).collect();
-        let covered = |ch: char| own.iter().any(|map| map.map(ch).is_some());
-        let (mut math, mut emoji, mut scripts) = (false, false, Vec::new());
+        let own_covers = |ch: char| own.iter().any(|map| map.map(ch).is_some());
+        #[cfg(target_vendor = "apple")]
+        let slot_maps: Vec<_> = self.fallbacks.apple_slots.iter().flatten().filter_map(|(blob, index)| index.charmap(blob.as_ref())).collect();
+        #[cfg(target_vendor = "apple")]
+        let slot_covers = |ch: char| slot_maps.iter().any(|map| map.map(ch).is_some_and(|id| id != 0));
+        #[cfg(not(target_vendor = "apple"))]
+        let slot_covers = |_: char| false;
+        let emoji = emoji_requested && self.emoji.is_none() && !self.fallbacks.asked.contains(&'\u{FE0F}');
+        let (mut math, mut scripts) = (false, Vec::new());
         let (mut cjk, mut cjk_more, mut missing): (Vec<char>, Vec<char>, Vec<char>) = (Vec::new(), Vec::new(), Vec::new());
         let cjk_done = self.fallbacks.cjk.contains(&locale);
         for ch in text.chars() {
@@ -285,7 +296,7 @@ impl TextSystem {
                 continue;
             }
             if is_cjk(ch) {
-                if covered(ch) { continue; }
+                if own_covers(ch) { continue; }
                 // The language's own CJK font, the first time a text in it has CJK.
                 if !cjk_done && !cjk.contains(&ch) && cjk.len() < 64 {
                     cjk.push(ch);
@@ -296,11 +307,12 @@ impl TextSystem {
                 }
                 continue;
             }
-            // Windows' fallback covers symbol blocks; only math alphanumerics want one math font.
-            math |= self.math.is_none() && if cfg!(windows) { fallback::is_math_alphanumeric(ch) } else { fallback::needs_symbols(ch) };
-            // An emoji by default (✅ ⚡) wants the colour emoji family as `U+FE0F` does.
-            emoji |= (ch == '\u{FE0F}' || fallback::is_emoji(ch.encode_utf8(&mut [0; 4]))) && self.emoji.is_none() && !self.fallbacks.asked.contains(&'\u{FE0F}');
-            if !needs_no_font(ch) && !self.fallbacks.asked.contains(&ch) && !missing.contains(&ch) && !covered(ch) {
+            // Math alphanumerics route to a single face. Other symbols only need it where
+            // the platform's fallback or the loaded slot fonts don't cover them.
+            let slot_covered = slot_covers(ch);
+            math |= self.math.is_none() && (fallback::is_math_alphanumeric(ch)
+                || (!cfg!(windows) && fallback::needs_symbols(ch) && !slot_covered));
+            if !needs_no_font(ch) && !self.fallbacks.asked.contains(&ch) && !missing.contains(&ch) && !own_covers(ch) && !slot_covered {
                 missing.push(ch);
             }
         }
@@ -335,6 +347,10 @@ impl TextSystem {
         if emoji {
             self.fallbacks.asked.insert('\u{FE0F}');
         }
+        #[cfg(target_vendor = "apple")]
+        if emoji {
+            self.load_apple_emoji();
+        }
         #[cfg(windows)]
         {
             if emoji {
@@ -364,7 +380,7 @@ impl TextSystem {
         }
         #[cfg(not(windows))]
         {
-            if (emoji || !missing.is_empty()) && !self.fallbacks.symbols {
+            if ((emoji && self.emoji.is_none()) || !missing.is_empty()) && !self.fallbacks.symbols {
                 self.load_symbol_families();
             }
             // What the symbol families lack (Ethiopic, Khmer, Tibetan...): the platform's own
@@ -380,8 +396,17 @@ impl TextSystem {
     #[cfg(not(windows))]
     fn load_symbol_families(&mut self) {
         self.fallbacks.symbols = true;
-        self.symbol_families = load_families(&mut self.font_cx.collection, SYMBOL_FONT_FILES, SYMBOL_FAMILIES);
-        self.emoji = self.symbol_families.iter().copied().find(|f| f.contains("Emoji"));
+        #[cfg(target_vendor = "apple")]
+        {
+            load_files(&mut self.font_cx.collection, &mut self.font_files, platform::family_files(SYMBOL_FAMILIES));
+            self.symbol_families = present_families(&mut self.font_cx.collection, SYMBOL_FAMILIES);
+            self.symbol_families.extend(self.emoji);
+        }
+        #[cfg(not(target_vendor = "apple"))]
+        {
+            self.symbol_families = load_families(&mut self.font_cx.collection, SYMBOL_FONT_FILES, SYMBOL_FAMILIES);
+            self.emoji = self.symbol_families.iter().copied().find(|f| f.contains("Emoji"));
+        }
         #[cfg(all(unix, not(target_vendor = "apple"), not(target_os = "android")))]
         if self.emoji.is_none()
             && let Some((family, files)) = fontconfig::emoji()
@@ -451,7 +476,9 @@ impl TextSystem {
             let locale = self.language.as_ref().map(|l| l.to_string());
             self.add_symbol_files(direct_write::fallback_files(&['A'], locale.as_deref()));
         }
-        #[cfg(not(windows))]
+        #[cfg(target_vendor = "apple")]
+        self.load_apple_slot_fallbacks();
+        #[cfg(not(any(target_vendor = "apple", windows)))]
         if !self.fallbacks.symbols {
             self.load_symbol_families();
         }
@@ -494,7 +521,7 @@ impl TextSystem {
     /// Loads the symbol families now, as a text needing them would (tests check what's installed).
     #[cfg(test)]
     pub(crate) fn load_symbol_fonts(&mut self) {
-        self.load_fallbacks("\u{2318}\u{2713}\u{FE0F}\u{1F600}", None);
+        self.load_fallbacks("\u{2318}\u{2713}\u{FE0F}\u{1F600}", None, true);
     }
 }
 

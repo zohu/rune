@@ -94,7 +94,12 @@ fn fallback_family_files_with(
             // the character, and `.LastResort` means no installed font covers it (loading it as a
             // fallback face would box every later fallback symbol). Check both before
             // `resolve_public`, which reads every face name in the file (369 faces in `SFNS.ttf`).
-            if family == base_name || family.trim_start_matches('.') == "LastResort" || seen.contains(&family) { continue; }
+            // Emoji presentation loads Apple Color Emoji directly. Skip its hidden aliases
+            // too, so a text-only lookup never scans the same file for a monochrome face.
+            let visible = family.trim_start_matches('.');
+            if family == base_name || visible.starts_with(super::APPLE_EMOJI_FAMILY) || visible == "LastResort" || seen.contains(&family) {
+                continue;
+            }
             seen.push(family.clone());
             // PingFang (CoreText's Chinese fallback) draws with `hvgl` outlines, which no
             // outline reader here can draw: Chinese takes Hiragino Sans GB, or Heiti TC for

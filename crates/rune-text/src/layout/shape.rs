@@ -144,7 +144,7 @@ impl TextSystem {
         };
         let routes = fallback::routes(text);
         let language = language::of_text(text, self.language);
-        self.load_fallbacks(text, language);
+        self.load_fallbacks(text, language, routes.iter().any(|(_, route)| *route == Route::Emoji));
         // `trak` tracking at the point size (see `trak.rs`), on top of `style.tracking`. An
         // explicit optical size `o` picks the entry instead, as Core Text tracks `o`-point text
         // scaled to the set size; spans scale the lookup with their size. Each style range gets
