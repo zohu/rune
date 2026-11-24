@@ -5,14 +5,32 @@ use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 use super::super::Gpu;
 
 fn trigger_validation_error(device: &wgpu::Device) -> std::thread::Result<()> {
+    trigger_validation_error_with_label(device, "uncaptured-error-policy-probe")
+}
+
+const RESTORED_ADOPTED_LABEL: &str = "restored-adopted-device";
+
+fn trigger_validation_error_with_label(device: &wgpu::Device, label: &str) -> std::thread::Result<()> {
     catch_unwind(AssertUnwindSafe(|| {
         drop(device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("uncaptured-error-policy-probe"),
+            label: Some(label),
             size: 4,
             usage: wgpu::BufferUsages::empty(),
             mapped_at_creation: false,
         }));
     }))
+}
+
+#[test]
+fn restoring_callbacks_reports_destroy_on_the_original_device() {
+    let Some(gpu) = Gpu::test_headless_wgpu() else { return };
+    let Some(other) = Gpu::test_headless_wgpu() else { return };
+    gpu.device.set_device_lost_callback(|_, _| {});
+    gpu.restore_device_callbacks();
+    gpu.device.destroy();
+    let _ = gpu.device.poll(wgpu::PollType::wait_indefinitely());
+    assert!(gpu.is_lost());
+    assert!(!other.is_lost());
 }
 
 #[test]
@@ -29,6 +47,12 @@ fn surface_error_policy_is_tracked_without_suppressing_test_panics() {
         trigger_validation_error(&display.device).is_err(),
         "default test runs must keep wgpu's validation panic",
     );
+    display.device.on_uncaptured_error(Arc::new(|_| {}));
+    display.restore_device_callbacks();
+    assert!(
+        trigger_validation_error(&display.device).is_err(),
+        "restoring a display device during normal tests must keep validation fatal",
+    );
 }
 
 #[test]
@@ -42,6 +66,12 @@ fn surface_error_policy_child() {
     assert!(
         trigger_validation_error(&headless.device).is_err(),
         "headless wgpu device must panic on uncaptured validation errors",
+    );
+    headless.device.on_uncaptured_error(Arc::new(|_| {}));
+    headless.restore_device_callbacks();
+    assert!(
+        trigger_validation_error(&headless.device).is_err(),
+        "restoring a headless device must keep validation fatal with surface logging enabled",
     );
 
     // 2. Display / prewarmed devices (warm.rs on Windows/Linux, prewarm.rs on macOS,
@@ -90,6 +120,16 @@ fn surface_error_policy_child() {
         1,
         "second adoption call must be a no-op",
     );
+    adopted.restore_device_callbacks();
+    assert!(
+        trigger_validation_error_with_label(&adopted.device, RESTORED_ADOPTED_LABEL).is_ok(),
+        "explicit restoration must recover the logging policy of an adopted device",
+    );
+    assert_eq!(
+        adopted_seen.load(Ordering::SeqCst),
+        1,
+        "the external handler must stop receiving errors after restoration",
+    );
 
     // 4. Gpu::from_device (external surface device) installs the policy at construction.
     let instance = Gpu::wgpu_instance();
@@ -128,6 +168,10 @@ fn surface_error_policy_matches_across_direct_prewarm_adopted_and_headless_devic
     assert!(
         stderr.contains("rune: a GPU error went uncaptured"),
         "expected uncaptured error log in stderr, got:\n{stderr}",
+    );
+    assert!(
+        stderr.contains(RESTORED_ADOPTED_LABEL),
+        "expected restored logger to report the adopted device's validation error, got:\n{stderr}",
     );
 }
 

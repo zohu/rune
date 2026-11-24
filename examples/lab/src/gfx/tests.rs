@@ -1,5 +1,5 @@
 use rune::Env;
-use rune::compose::{Compositor, Frame};
+use rune::compose::{Compositor, FrameArgs};
 use rune::render::{Gpu, OFFSCREEN_FORMAT, Offscreen, Renderer};
 use rune::runtime::Runtime;
 
@@ -11,18 +11,16 @@ use super::LabGfx;
 fn draw_on(gfx: &mut LabGfx, rt: &mut Runtime<Lab>, gpu: &Gpu, ui_ren: &mut Renderer, off: &Offscreen, dt: f64) {
     rt.frame(dt);
     let mut encoder = gpu.device.create_command_encoder(&Default::default());
-    let mut frame = Frame {
-        device: &gpu.device,
-        queue: &gpu.queue,
+    let mut frame = FrameArgs {
+        gpu,
         encoder: &mut encoder,
         target: &off.view,
         format: OFFSCREEN_FORMAT,
         size: (off.width, off.height),
         dt,
         update_ms: 0.0,
-        rt,
         ui: ui_ren,
-    };
+    }.with_runtime(rt);
     gfx.render(&mut frame);
     ui_ren.submit(&gpu.queue, encoder);
     gpu.device.poll(wgpu::PollType::wait_indefinitely()).ok();
@@ -173,41 +171,24 @@ fn amd_removed_device_recreation_needs_release_gpu() {
 
     // 1. Render a lens-frost frame on the real AMD hardware DX12 adapter.
     let (dev1, queue1) = request_amd(&amd1).expect("initial AMD device creation must succeed");
-    let mut ui1 = Renderer::new(&dev1, OFFSCREEN_FORMAT);
+    let gpu1 = Gpu::from_headless_device(instance.clone(), amd1, dev1, queue1);
+    let mut ui1 = Renderer::new(&gpu1.device, OFFSCREEN_FORMAT);
     ui1.attach_text(&mut rt.text.atlas);
-    let off1 = Offscreen::new(&dev1, size.0, size.1);
-    rt.frame(0.0);
-    {
-        let mut encoder = dev1.create_command_encoder(&Default::default());
-        let mut frame = Frame {
-            device: &dev1,
-            queue: &queue1,
-            encoder: &mut encoder,
-            target: &off1.view,
-            format: OFFSCREEN_FORMAT,
-            size: (off1.width, off1.height),
-            dt: 0.0,
-            update_ms: 0.0,
-            rt: &mut rt,
-            ui: &mut ui1,
-        };
-        gfx.render(&mut frame);
-        ui1.submit(&queue1, encoder);
-    }
-    dev1.poll(wgpu::PollType::wait_indefinitely()).ok();
+    let off1 = Offscreen::new(&gpu1.device, size.0, size.1);
+    draw_on(&mut gfx, &mut rt, &gpu1, &mut ui1, &off1, 0.0);
     assert!(gfx.res.is_some());
 
     // 2. Remove the AMD D3D12 device on purpose, then drop Rune's own surface/renderer/device
     // while LabGfx still owns LabGfx::res (the exact pre-fix Host::reattach state).
     // SAFETY: triggering intentional device removal on the test's own DX12 device.
     unsafe {
-        let hal = dev1.as_hal::<wgpu::hal::api::Dx12>().expect("DX12 device");
+        let hal = gpu1.device.as_hal::<wgpu::hal::api::Dx12>().expect("DX12 device");
         let dev5: ID3D12Device5 = hal.raw_device().cast().expect("ID3D12Device5");
         dev5.RemoveDevice();
     }
-    // Drop the old adapter too, just like `self.gpu = None` drops `Gpu { adapter, device, queue }`:
-    // `wgpu_hal::dx12::Adapter` holds an `ID3D12Device` ref, so reattach re-exposes the adapter.
-    drop((off1, ui1, queue1, dev1, amd1));
+    // Dropping the GPU drops the old adapter too. It holds an `ID3D12Device` ref, so reattach
+    // re-exposes the adapter.
+    drop((off1, ui1, gpu1));
 
     // While LabGfx::res is still held, re-exposing and creating a device on the same AMD adapter
     // either fails or hands back the removed singleton device.
@@ -239,32 +220,15 @@ fn amd_removed_device_recreation_needs_release_gpu() {
     assert_eq!(info2.vendor, 0x1002);
     assert_ne!(info2.device_type, wgpu::DeviceType::Cpu, "recovered device must stay on hardware AMD, not WARP");
 
-    let mut ui2 = Renderer::new(&dev2, OFFSCREEN_FORMAT);
+    let gpu2 = Gpu::from_headless_device(instance.clone(), amd2, dev2, queue2);
+    let mut ui2 = Renderer::new(&gpu2.device, OFFSCREEN_FORMAT);
     rt.text.atlas.invalidate();
     rt.images.invalidate();
     ui2.attach_text(&mut rt.text.atlas);
-    let off2 = Offscreen::new(&dev2, size.0, size.1);
+    let off2 = Offscreen::new(&gpu2.device, size.0, size.1);
     // Render a lens-frost frame on the recovered AMD hardware device.
-    rt.frame(1.0 / 60.0);
-    {
-        let mut encoder = dev2.create_command_encoder(&Default::default());
-        let mut frame = Frame {
-            device: &dev2,
-            queue: &queue2,
-            encoder: &mut encoder,
-            target: &off2.view,
-            format: OFFSCREEN_FORMAT,
-            size: (off2.width, off2.height),
-            dt: 1.0 / 60.0,
-            update_ms: 0.0,
-            rt: &mut rt,
-            ui: &mut ui2,
-        };
-        gfx.render(&mut frame);
-        ui2.submit(&queue2, encoder);
-    }
-    dev2.poll(wgpu::PollType::wait_indefinitely()).ok();
-    let reason = device_removed_reason(&dev2);
+    draw_on(&mut gfx, &mut rt, &gpu2, &mut ui2, &off2, 1.0 / 60.0);
+    let reason = device_removed_reason(&gpu2.device);
     assert!(reason.is_none(), "recovered AMD device failed to render lens-frost: {reason:?}");
     assert_eq!(gfx.res.as_ref().unwrap().device_key, ui2.device_key());
 }
@@ -298,13 +262,13 @@ fn amd_repeated_removals_fall_back_to_warp_then_give_up() {
         return;
     };
 
-    let open_device = |adapter: &wgpu::Adapter| -> (wgpu::Device, wgpu::Queue) {
+    let open_device = |adapter: wgpu::Adapter| -> Gpu {
         let optional = wgpu::Features::TIMESTAMP_QUERY
             | wgpu::Features::DUAL_SOURCE_BLENDING
             | wgpu::Features::PASSTHROUGH_SHADERS;
         let required_features = adapter.features() & optional;
         let limits = adapter.limits();
-        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("lab-amd-fallback-test"),
             required_features,
             required_limits: wgpu::Limits::default()
@@ -314,7 +278,8 @@ fn amd_repeated_removals_fall_back_to_warp_then_give_up() {
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: Default::default(),
         }))
-        .expect("device creation must succeed")
+        .expect("device creation must succeed");
+        Gpu::from_headless_device(instance.clone(), adapter, device, queue)
     };
 
     let remove_d3d12 = |device: &wgpu::Device| {
@@ -341,34 +306,17 @@ fn amd_repeated_removals_fall_back_to_warp_then_give_up() {
     rt.track_marks = true;
     let mut gfx = LabGfx::default();
 
-    let render_frame = |gfx: &mut LabGfx, rt: &mut Runtime<Lab>, dev: &wgpu::Device, queue: &wgpu::Queue, ui_ren: &mut Renderer, off: &Offscreen, dt: f64| {
-        rt.frame(dt);
-        let mut encoder = dev.create_command_encoder(&Default::default());
-        let mut frame = Frame {
-            device: dev,
-            queue,
-            encoder: &mut encoder,
-            target: &off.view,
-            format: OFFSCREEN_FORMAT,
-            size: (off.width, off.height),
-            dt,
-            update_ms: 0.0,
-            rt,
-            ui: ui_ren,
-        };
-        gfx.render(&mut frame);
-        ui_ren.submit(queue, encoder);
-        dev.poll(wgpu::PollType::wait_indefinitely()).ok();
-        assert!(!is_removed(dev), "healthy frame must complete without device removal");
+    let render_frame = |gfx: &mut LabGfx, rt: &mut Runtime<Lab>, gpu: &Gpu, ui_ren: &mut Renderer, off: &Offscreen, dt: f64| {
+        draw_on(gfx, rt, gpu, ui_ren, off, dt);
+        assert!(!is_removed(&gpu.device), "healthy frame must complete without device removal");
     };
 
     // Start healthy on AMD hardware.
-    let mut adapter = initial_amd;
-    let (mut dev, mut queue) = open_device(&adapter);
-    let mut ui_ren = Renderer::new(&dev, OFFSCREEN_FORMAT);
+    let mut gpu = open_device(initial_amd);
+    let mut ui_ren = Renderer::new(&gpu.device, OFFSCREEN_FORMAT);
     ui_ren.attach_text(&mut rt.text.atlas);
-    let mut off = Offscreen::new(&dev, size.0, size.1);
-    render_frame(&mut gfx, &mut rt, &dev, &queue, &mut ui_ren, &off, 0.0);
+    let mut off = Offscreen::new(&gpu.device, size.0, size.1);
+    render_frame(&mut gfx, &mut rt, &gpu, &mut ui_ren, &off, 0.0);
 
     let mut now = rune::time::now();
     let mut loss_state = LossState::default();
@@ -377,8 +325,8 @@ fn amd_repeated_removals_fall_back_to_warp_then_give_up() {
     // attempts 1-2 stay on AMD hardware, attempt 3 switches to WARP (DeviceType::Cpu).
     for attempt in 1u8..=3 {
         now += Duration::from_secs(10);
-        remove_d3d12(&dev);
-        drop((off, ui_ren, queue, dev, adapter));
+        remove_d3d12(&gpu.device);
+        drop((off, ui_ren, gpu));
         gfx.release_gpu();
         rt.text.atlas.invalidate();
         rt.images.invalidate();
@@ -391,34 +339,33 @@ fn amd_repeated_removals_fall_back_to_warp_then_give_up() {
         .next()
         .expect("step_loss must emit an effect");
 
-        if attempt < 3 {
+        let adapter = if attempt < 3 {
             assert_eq!(effect, LossEffect::Replace { mode: GpuMode::Hardware, switched_to_software: false });
-            adapter = find_amd().expect("AMD adapter must recover after release_gpu");
+            let adapter = find_amd().expect("AMD adapter must recover after release_gpu");
             let info = adapter.get_info();
             assert_eq!(info.vendor, 0x1002);
             assert_ne!(info.device_type, wgpu::DeviceType::Cpu, "attempt {attempt} must stay on AMD hardware");
+            adapter
         } else {
             assert_eq!(effect, LossEffect::Replace { mode: GpuMode::Software, switched_to_software: true });
             let pick = rune_gpu::pick::pick_software(&instance, None)
                 .expect("Windows DX12 must pick WARP on software fallback");
-            adapter = pick.adapter;
-            assert_eq!(adapter.get_info().device_type, wgpu::DeviceType::Cpu, "attempt 3 must switch to WARP");
-        }
+            assert_eq!(pick.adapter.get_info().device_type, wgpu::DeviceType::Cpu, "attempt 3 must switch to WARP");
+            pick.adapter
+        };
 
-        let (next_dev, next_queue) = open_device(&adapter);
-        dev = next_dev;
-        queue = next_queue;
-        ui_ren = Renderer::new(&dev, OFFSCREEN_FORMAT);
+        gpu = open_device(adapter);
+        ui_ren = Renderer::new(&gpu.device, OFFSCREEN_FORMAT);
         ui_ren.attach_text(&mut rt.text.atlas);
-        off = Offscreen::new(&dev, size.0, size.1);
-        render_frame(&mut gfx, &mut rt, &dev, &queue, &mut ui_ren, &off, 1.0 / 60.0);
+        off = Offscreen::new(&gpu.device, size.0, size.1);
+        render_frame(&mut gfx, &mut rt, &gpu, &mut ui_ren, &off, 1.0 / 60.0);
     }
 
     // 3 WARP removals separated by 10 s: attempts 1-2 stay on WARP, attempt 3 gives up.
     for warp_attempt in 1u8..=3 {
         now += Duration::from_secs(10);
-        remove_d3d12(&dev);
-        drop((off, ui_ren, queue, dev, adapter));
+        remove_d3d12(&gpu.device);
+        drop((off, ui_ren, gpu));
         gfx.release_gpu();
         rt.text.atlas.invalidate();
         rt.images.invalidate();
@@ -435,15 +382,12 @@ fn amd_repeated_removals_fall_back_to_warp_then_give_up() {
             assert_eq!(effect, LossEffect::Replace { mode: GpuMode::Software, switched_to_software: false });
             let pick = rune_gpu::pick::pick_software(&instance, None)
                 .expect("WARP must remain available for retries");
-            adapter = pick.adapter;
-            assert_eq!(adapter.get_info().device_type, wgpu::DeviceType::Cpu);
-            let (next_dev, next_queue) = open_device(&adapter);
-            dev = next_dev;
-            queue = next_queue;
-            ui_ren = Renderer::new(&dev, OFFSCREEN_FORMAT);
+            assert_eq!(pick.adapter.get_info().device_type, wgpu::DeviceType::Cpu);
+            gpu = open_device(pick.adapter);
+            ui_ren = Renderer::new(&gpu.device, OFFSCREEN_FORMAT);
             ui_ren.attach_text(&mut rt.text.atlas);
-            off = Offscreen::new(&dev, size.0, size.1);
-            render_frame(&mut gfx, &mut rt, &dev, &queue, &mut ui_ren, &off, 1.0 / 60.0);
+            off = Offscreen::new(&gpu.device, size.0, size.1);
+            render_frame(&mut gfx, &mut rt, &gpu, &mut ui_ren, &off, 1.0 / 60.0);
         } else {
             assert_eq!(effect, LossEffect::GiveUp, "3rd WARP removal must reach GiveUp");
             assert_eq!(loss_state, LossState::GivenUp);
