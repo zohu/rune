@@ -3,6 +3,7 @@ use crate::PointerPress;
 use crate::el::{col, el};
 
 mod app_ime;
+mod caret_breathe;
 mod context_menu_key;
 mod draw_on;
 mod edit;
