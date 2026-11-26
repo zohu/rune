@@ -958,11 +958,17 @@ impl RuntimeCore {
                 }
             }
             if let Some(c) = caret {
-                let caret_color = match &n.input {
-                    Some(inp) => if inp.caret_inked { inp.caret } else { color },
-                    None => spec.cold.caret.unwrap_or(color),
+                let (ink, alpha) = match &n.input {
+                    Some(inp) => {
+                        let ink = if inp.caret_inked { inp.caret } else { color };
+                        let breath = inp.caret_breathe.map(|spec| {
+                            (spec, o * ink.a >= 1.0 / 255.0 && !inp.edit.is_composing())
+                        });
+                        (ink, self.caret_alpha(n.id, breath, c, clip, now))
+                    }
+                    None => (spec.cold.caret.unwrap_or(color), 1.0),
                 };
-                self.instances.push(rect_inst(c, premul(caret_color, o, srgb), 0.0, clip, fade));
+                self.instances.push(rect_inst(c, premul(ink, o * alpha, srgb), 0.0, clip, fade));
             }
             if let Some(at) = inline_image_wake {
                 arm_image_wake(&mut self.paint, &mut self.motion, self.frame.live.visible(), self.clock, self.time_scale, now, at);

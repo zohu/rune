@@ -3,6 +3,32 @@
 //! is re-measured in the same commit when an edit moves it.
 use super::*;
 
+/// A breathing caret's pulse: at rest until a visible caret samples it, then counted from the
+/// frame that first did.
+#[derive(Default)]
+pub(in crate::runtime) enum Breath {
+    #[default]
+    Reset,
+    Running { owner: NodeId, epoch: f64 },
+}
+
+impl Breath {
+    pub(in crate::runtime) fn reset(&mut self) { *self = Self::Reset; }
+
+    /// The next deadline is a single idle wake; otherwise the visible pulse needs frames.
+    pub(in crate::runtime) fn sample(&mut self, owner: NodeId, now: f64, spec: crate::el::caret_breathe::Spec) -> (f32, Option<f64>) {
+        let epoch = match *self {
+            Self::Running { owner: current, epoch } if current == owner => epoch,
+            _ => { *self = Self::Running { owner, epoch: now }; now }
+        };
+        let elapsed = now - epoch;
+        if elapsed < spec.hold { return (1.0, Some(epoch + spec.hold)); }
+        let phase = (elapsed - spec.hold).rem_euclid(spec.period) / spec.period;
+        let wave = (0.5 + 0.5 * (phase * std::f64::consts::TAU).cos()) as f32;
+        (spec.minimum + (1.0 - spec.minimum) * wave, None)
+    }
+}
+
 /// Snapshot of a focused field's text and caret before an `El::on_input_key` handler runs.
 pub(in crate::runtime) struct CaretFollowCheck {
     path: String,
@@ -54,6 +80,8 @@ pub(crate) struct TextInputState {
     pub(in crate::runtime) caret: Option<(String, [f32; 4])>,
     /// The last view read the caret, so it re-runs when the caret moves.
     pub(in crate::runtime) caret_watch: bool,
+    /// The pulse of a caret that breathes (`El::caret_breathe`).
+    pub(in crate::runtime) caret_breath: Breath,
     /// An edit ran this frame: keep the caret in its scroll viewport after the commit.
     pub(in crate::runtime) caret_follow: bool,
     /// Snapshot of the focused field before an `El::on_input_key` handler consumed a key; resolved
@@ -102,6 +130,7 @@ impl TextInputState {
             input_scroll: HashMap::default(),
             caret: None,
             caret_watch: false,
+            caret_breath: Breath::default(),
             caret_follow: false,
             caret_follow_check: None,
             app_ime_comp: Default::default(),
@@ -198,6 +227,25 @@ impl TextInputState {
 }
 
 impl RuntimeCore {
+    /// The alpha a field's caret draws at this frame: whole unless it breathes
+    /// (`El::caret_breathe`, with whether it may pulse), none while another window is in front.
+    /// A pulsing caret on screen asks for one wake at its hold's end and then for frames.
+    pub(in crate::runtime) fn caret_alpha(&mut self, owner: NodeId, breath: Option<(crate::el::caret_breathe::Spec, bool)>, caret: [f32; 4], clip: [f32; 4], now: f64) -> f32 {
+        let Some((spec, free)) = breath else { self.edit.caret_breath.reset(); return 1.0 };
+        if self.host.window_focused == Some(false) { return 0.0; }
+        let on_screen = caret[0] < clip[2] && caret[0] + caret[2] > clip[0] && caret[1] < clip[3] && caret[1] + caret[3] > clip[1];
+        if !(free && on_screen && self.frame.live.visible() && !self.reduced_motion && self.time_scale > 0.0 && spec.minimum < 1.0) {
+            self.edit.caret_breath.reset();
+            return 1.0;
+        }
+        let (alpha, wake) = self.edit.caret_breath.sample(owner, now, spec);
+        match wake {
+            Some(at) => self.wake_for_motion(at),
+            None => self.motion.mark_loops_active(true),
+        }
+        alpha
+    }
+
     /// Any vertical shift from ancestor growth rows whose presented height has not settled to layout.
     pub(in crate::runtime) fn stack_row_dy(&self, nodes: &[Node], i: usize) -> f32 {
         let mut dy = 0.0;
