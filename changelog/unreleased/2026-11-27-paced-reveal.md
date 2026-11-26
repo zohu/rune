@@ -1,0 +1,1 @@
+- Streaming text can use `El::paced_reveal` to fade Unicode words in reading order across a document, reveal code by line, bound the delay of bursty deliveries and follow the visible glyphs with a live caret.

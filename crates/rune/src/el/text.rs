@@ -670,7 +670,7 @@ impl El {
             t.fade_em = em.max(0.0);
         })
     }
-    /// Streaming word reveal (see [`TextSpec::reveal`]).
+    /// Streaming word reveal (see [`TextSpec::reveal`]); a container can time its texts together with [`El::paced_reveal`].
     pub fn reveal(mut self, word_fade: f32) -> Self {
         if let Some(t) = &mut self.text {
             t.reveal = word_fade.max(0.0);

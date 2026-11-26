@@ -161,7 +161,7 @@ fn same_visual_cold(a: &crate::el::VisualCold, b: &crate::el::VisualCold) -> boo
     let crate::el::VisualCold {
         surface, surface_place, border_bottom, border_sides, border_layout, border_dash, border_dash_phase, shadows, blur_motion,
         clip, clip_radius, clip_corners, cutout, icon, icon_inked, icon_one_color, gradient, radial, outline, shape,
-        grid, pixels, pixels_fit, effect, backdrop_blur, hover_motion, hover_within, press_motion,
+        grid, pixels, pixels_fit, effect, backdrop_blur, hover_motion, hover_within, paced_reveal, press_motion,
         group_opacity, group_color, hover_alone, hover_share, icon_turn, cache_key, offset_motion, scale_motion,
         origin, rotate_motion, child_exit, enter_delay, motion_intent, instant_motion, clip_to_content, flight_crop, flight_in_place,
         hold_landing, row_face, press_color, hover_fill, press_fill, hover_border, press_border, paint_contain, motion_snaps, hairline, offset, paint_alpha, layer_opacity, blur, rotate, mark, mirror_rtl, paint_order,
@@ -194,7 +194,7 @@ fn same_visual_cold(a: &crate::el::VisualCold, b: &crate::el::VisualCold) -> boo
             _ => false,
         }
         && a.pixels_fit == *pixels_fit && a.effect == *effect && a.backdrop_blur == *backdrop_blur
-        && opt_rc_eq(&a.hover_motion, hover_motion) && opt_rc_eq(&a.hover_within, hover_within)
+        && opt_rc_eq(&a.paced_reveal, paced_reveal) && opt_rc_eq(&a.hover_motion, hover_motion) && opt_rc_eq(&a.hover_within, hover_within)
         && match (&a.press_motion, press_motion) {
             (None, None) => true,
             (Some(x), Some(y)) => Rc::ptr_eq(x, y) || **x == **y,

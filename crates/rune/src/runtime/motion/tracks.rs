@@ -45,6 +45,7 @@ pub(crate) struct MotionState {
     pub(super) fold_headers: HashMap<NodeId, String>,
     /// What this frame's commits held at their landing width (`El::hold_landing_width`).
     pub(super) landing_holds: landing_hold::LandingHolds,
+    pub(super) paced_carets: Vec<paced::CaretTrack>,
     pub(super) reveals: HashMap<NodeId, RevealPhase>,
     /// The reveal states `reveals` keeps for texts that have left the tree, newest first, at
     /// most `prune::REVEALS_KEPT` of them (see `prune_exited`).
@@ -88,6 +89,7 @@ impl MotionState {
             stacks: HashMap::default(),
             fold_headers: HashMap::default(),
             landing_holds: Default::default(),
+            paced_carets: Vec::new(),
             reveals: HashMap::default(),
             reveals_kept: Vec::new(),
             reveal_chain: RevealChain::default(),
@@ -520,6 +522,7 @@ impl MotionState {
     /// Advances all reveal phases against `scene`'s node clocks; returns whether any are still fading.
     pub(in crate::runtime) fn reveals_active(&mut self, scene: &Scene) -> bool {
         let store = scene.store();
+        self.paced_carets.retain_mut(|track| track.advance(scene));
         let mut any = false;
         for (id, st) in self.reveals.iter_mut() {
             let now = store.node_time(*id);
