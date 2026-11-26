@@ -75,6 +75,8 @@ pub struct VisualCold {
     pub(crate) backdrop_blur: f32,
     /// The hover track's enter and exit curves (default: snappy spring both ways).
     pub hover_motion: Option<Rc<(Anim, Anim)>>,
+    /// Reading-order timing and optional caret for this text subtree.
+    pub(crate) paced_reveal: Option<Rc<crate::el::paced_reveal::Pace>>,
     /// Hover curves for this element and the hover tracks below it without their own.
     pub(crate) hover_within: Option<Rc<(Anim, Anim)>>,
     /// The press tracks' down and up curves (default: instant down, snappy/pop up).
@@ -191,6 +193,7 @@ impl Empty for VisualCold {
         effect: None,
         backdrop_blur: 0.0,
         hover_motion: None,
+        paced_reveal: None,
         hover_within: None,
         press_motion: None,
         group_opacity: None,

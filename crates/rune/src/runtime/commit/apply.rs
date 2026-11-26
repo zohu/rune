@@ -65,10 +65,12 @@ impl RuntimeCore {
         // A row scrolled into view mounts settled with its subtree. Content added later under a
         // row already on screen is a live change and keeps its own entrance.
         // Parents precede children, so a remounting row passes its flag down its whole subtree.
+        let mut first_paced = None;
         for i in 0..nodes.len() {
             if let Some(p) = nodes[i].parent {
                 nodes[i].virtual_mount |= nodes[p].virtual_mount && !self.scene.contains(nodes[p].id);
             }
+            if first_paced.is_none() && nodes[i].vis.paced_reveal.is_some() { first_paced = Some(i); }
         }
         let first = self.commit.commits == 0;
         // The first frame's own reads, for the next launch's first view (`layout_seed`).
@@ -138,6 +140,9 @@ impl RuntimeCore {
         time_scales.clear();
         if time_scaled { self.motion.sync_time_scales(&mut self.scene, &nodes, &mut time_scales, false); }
 
+        // Data arriving without a pointer/key event still paces; an explicit instant lands it.
+        let land_reveal = first || concealing || matches!(tx.commit, crate::el::Commit::Instant | crate::el::Commit::Settle);
+        let mut paced_scopes = self.commit_paced_reveals(&nodes, first_paced, land_reveal).into_iter().peekable();
         let can_skip_apply = !first && !tx.commit.lands() && !concealing && reduced_motion_unchanged && !self.scene.tracing();
         let mut skip_spans = std::mem::take(&mut self.commit.memo.skip_scratch);
         self.commit.clean_apply_spans(&self.tree, &self.scene, &self.motion, &nodes, &memo_reused, can_skip_apply, |i| self.reorder_jump(&nodes, i), &mut skip_spans);
@@ -524,6 +529,8 @@ impl RuntimeCore {
             if let Some(spec) = &nodes[i].text
                 && spec.reveal >= 0.0
             {
+                while paced_scopes.peek().is_some_and(|r| r.end <= i) { paced_scopes.next(); }
+                if paced_scopes.peek().is_some_and(|r| r.contains(&i)) { continue; }
                 let content = spec.content.as_str();
                 let now = if time_scaled { self.scene.store().node_time(id) } else { now };
                 let fade = if self.reduced_motion { spec.reveal.min(0.15) } else { spec.reveal };

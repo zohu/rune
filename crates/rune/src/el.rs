@@ -43,6 +43,7 @@ mod pills;
 mod pixel_snap;
 mod rare;
 mod ride_trailing;
+pub(crate) mod paced_reveal;
 mod scroll;
 mod selection_scope;
 mod selection_style;

@@ -7,6 +7,7 @@ set -e
 O=${1:-target/motion-audit}
 mkdir -p "$O"
 MOTION_GATE_OUT="$O/caret-breathe.gate.txt" scripts/motion-audit/gate caret-breathe -- -p rune --lib caret_breathe_motion_gate
+MOTION_GATE_OUT="$O/paced-reveal.gate.txt" scripts/motion-audit/gate stream/one-burst -- -p rune --lib paced_reveal_motion_gate
 MOTION_GATE_OUT="$O/live-tail.gate.txt" sh scripts/motion-audit/scenarios/live-tail.sh
 MOTION_GATE_OUT="$O/matched-offset.gate.txt" sh scripts/motion-audit/scenarios/matched-offset.sh
 MOTION_GATE_OUT="$O/matched-rotation.gate.txt" sh scripts/motion-audit/scenarios/matched-rotation.sh
