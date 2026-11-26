@@ -1,0 +1,1 @@
+- An intrinsically sized `El::live_text` keeps the authored placeholder's layout box when the window resizes, including inside reused memos.

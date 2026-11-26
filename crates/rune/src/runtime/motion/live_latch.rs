@@ -280,6 +280,7 @@ impl timer_wake::FrameState {
                     let cold = &mut *node.cold;
                     let seen = &mut cold.live_text_seen;
                     if let Some(live_text) = live.read(seen) && spec.source_text() != &*live_text {
+                        cold.live_text_measure.get_or_insert_with(|| spec.clone());
                         spec.replace_content(live_text.to_string());
                         spec.remap_inline_boxes_for_live();
                         spec.apply_case();

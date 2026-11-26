@@ -211,3 +211,26 @@ fn memo_holding_wrapped_truncated_clamped_live_text_reuses_and_relayouts_on_widt
     rt.frame(dt);
     assert_eq!(find(&rt, "trunc").text.as_ref().unwrap().content, "updated after rebase");
 }
+
+#[test]
+fn live_text_keeps_its_placeholder_width_after_a_resize() {
+    let value = LiveText::new("x");
+    let mut rt = Runtime::new(
+        value.clone(),
+        |value, _| col().w_full().h_full().child(memo("label", (), || text("x").self_start().live_text(value))),
+        (600.0, 400.0),
+        Env::new(true, 1.0),
+    );
+    let label = |rt: &Runtime<LiveText>| rt.elements().into_iter().find(|el| el.key.as_deref() == Some("label")).unwrap();
+    rt.frame(0.0);
+    let width = label(&rt).target[2];
+    value.set("A much longer live label");
+    rt.frame(0.01);
+    rt.invalidate();
+    rt.frame(0.01);
+    rt.set_viewport((530.0, 400.0), 1.0);
+    rt.frame(0.01);
+    let live = label(&rt);
+    assert_eq!(live.target[2], width);
+    assert!(live.text_size.unwrap()[0] > width);
+}

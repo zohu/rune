@@ -447,7 +447,8 @@ pub(in crate::runtime) fn compute_layout(taffy: &mut LayoutEngine, root: SlotId,
     taffy.compute_layout(root, room, |inputs, ctx, style| {
         rune_taffy::compute_leaf_layout(inputs, style, |known, avail| {
             let Some(i) = ctx else { return Size::ZERO };
-            let Some(spec) = nodes[i].text.as_ref() else {
+            let authored = nodes[i].cold.get().and_then(|c| c.live_text_measure.as_ref());
+            let Some(spec) = authored.or(nodes[i].text.as_ref()) else {
                 return picture_size(known, avail, nodes[i].cold.get().and_then(|c| c.pixel_aspect).unwrap_or(0.0));
             };
             if let Some(pt) = spec.positioned() {
@@ -478,7 +479,8 @@ pub(in crate::runtime) fn compute_layout(taffy: &mut LayoutEngine, root: SlotId,
                 }
             }
             let is_input = nodes[i].input.is_some();
-            let laid = if spec.cold.live.is_some()
+            // A latched layout shapes the current value for paint, not the authored placeholder.
+            let laid = if authored.is_none() && spec.cold.live.is_some()
                 && !spec.wrap
                 && nodes[i].elided.is_none()
                 && let Some(existing) = nodes[i].text_layout.as_ref()

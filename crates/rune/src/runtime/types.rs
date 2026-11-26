@@ -25,6 +25,8 @@ pub(crate) struct NodeCold {
     /// Verified tabular-digit glyph substitution for a single-line `LiveText` node.
     pub(super) tabular_layout: Option<Rc<crate::text::TabularGlyphs>>,
     pub(super) live_text_seen: Option<u128>,
+    /// Intrinsic measurement uses the authored placeholder while paint follows the live value.
+    pub(super) live_text_measure: Option<crate::cold::SharedBox<TextSpec>>,
     pub(super) looping: Option<Box<rune_motion::LoopSpec>>,
     pub(super) loop_times: Option<u32>,
     pub(super) frame_motion: Option<Box<rune_motion::Anim>>,
@@ -78,6 +80,7 @@ impl crate::cold::Empty for NodeCold {
         run_layout: None,
         tabular_layout: None,
         live_text_seen: None,
+        live_text_measure: None,
         looping: None,
         loop_times: None,
         frame_motion: None,
