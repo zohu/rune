@@ -524,3 +524,39 @@ fn on_key_any_preserves_nesting_click_focus_tx_took_text_field_and_modal_inert_g
     send_key(&mut rt, Key::Right);
     assert!(log.borrow().is_empty(), "inert control receives no on_key_any");
 }
+
+#[test]
+fn a_component_handles_press_wheel_and_magnify_without_the_host_state() {
+    fn component(events: &Rc<RefCell<Vec<&'static str>>>) -> El {
+        let press = events.clone();
+        let wheel = events.clone();
+        let magnify = events.clone();
+        el().size(90.0, 60.0)
+            .on_press_tx_any(move |tx| {
+                press.borrow_mut().push("press");
+                tx.live_only();
+            })
+            .on_wheel_any(move |_, tx| {
+                wheel.borrow_mut().push("wheel");
+                tx.live_only();
+                true
+            })
+            .on_magnify_any(move |_, tx| {
+                magnify.borrow_mut().push("magnify");
+                tx.live_only();
+                true
+            })
+    }
+
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let mut rt = Runtime::new(events.clone(), |events, _| component(events), (90.0, 60.0), Env::new(true, 1.0));
+    rt.frame(0.0);
+    rt.pointer_down(10.0, 10.0);
+    rt.pointer_up(10.0, 10.0);
+    rt.frame(0.0);
+    rt.wheel_event(crate::WheelEvent::new(0.0, -5.0).at(10.0, 10.0));
+    rt.frame(0.0);
+    rt.magnify_event(crate::MagnifyEvent::new(0.15).at(10.0, 10.0));
+    rt.frame(0.0);
+    assert_eq!(*events.borrow(), ["press", "wheel", "magnify"]);
+}

@@ -19,6 +19,14 @@ impl El {
         }
         self
     }
+    /// [`El::on_press_tx`] for a component that doesn't read the app's state.
+    pub fn on_press_tx_any(mut self, f: impl Fn(&mut Tx) + 'static) -> Self {
+        self.handlers.on_press = Some(Rc::new(move |_, tx| f(tx)));
+        if self.role == RoleTag::GROUP {
+            self.role = RoleTag::BUTTON;
+        }
+        self
+    }
     /// A press on a surface that isn't a control: a pane that clears a selection or takes
     /// keyboard routing when clicked, a scrim that closes what it covers. It runs as
     /// [`El::on_press`] does under the pointer, but the element stays what its role says (it

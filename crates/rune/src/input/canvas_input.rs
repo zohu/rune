@@ -218,6 +218,12 @@ impl El {
         self
     }
 
+    /// [`El::on_wheel`] for a component that doesn't read the app's state.
+    pub fn on_wheel_any(mut self, f: impl Fn(WheelEvent, &mut Tx) -> bool + 'static) -> Self {
+        self.canvas_input().wheel = Some(Rc::new(move |_, e, tx| f(e, tx)));
+        self
+    }
+
     /// Trackpad and touchscreen two-finger pinches over this element: return `true` to take one.
     /// The innermost handler under the pointer (or fingers' midpoint) hears it first. Phased
     /// non-wheel pinches (`Began` / `Moved` / `Ended` from macOS trackpads and touchscreens, with
@@ -247,6 +253,12 @@ impl El {
     /// ```
     pub fn on_magnify<S: 'static>(mut self, f: impl Fn(&mut S, MagnifyEvent, &mut Tx) -> bool + 'static) -> Self {
         self.canvas_input().magnify = Some(Rc::new(move |s, e, tx| f(state::<S>(s), e, tx)));
+        self
+    }
+
+    /// [`El::on_magnify`] for a component that doesn't read the app's state.
+    pub fn on_magnify_any(mut self, f: impl Fn(MagnifyEvent, &mut Tx) -> bool + 'static) -> Self {
+        self.canvas_input().magnify = Some(Rc::new(move |_, e, tx| f(e, tx)));
         self
     }
 

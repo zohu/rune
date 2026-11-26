@@ -1,0 +1,1 @@
+- Components can take presses, wheel events, and magnification without naming the application's state type using `El::on_press_tx_any`, `on_wheel_any`, and `on_magnify_any`.
